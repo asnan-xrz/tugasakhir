@@ -10,6 +10,8 @@ function App() {
   const [images, setImages] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [backendStatus, setBackendStatus] = useState('Checking...');
+  const [analysisResults, setAnalysisResults] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Check backend health on load
   useEffect(() => {
@@ -17,6 +19,28 @@ function App() {
       .then(() => setBackendStatus('Connected'))
       .catch(() => setBackendStatus('Disconnected'));
   }, []);
+
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    setIsUploading(true);
+    try {
+      const response = await axios.post(`${API_URL}/api/upload-script`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setAnalysisResults(response.data.scenes);
+    } catch (error) {
+      console.error('Upload failed:', error);
+      alert('Upload failed: ' + (error.response?.data?.detail || error.message));
+    } finally {
+      setIsUploading(false);
+      event.target.value = null; // reset input
+    }
+  };
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -75,9 +99,12 @@ function App() {
         
         <div className="p-4 border-b border-cyan-900/20 flex items-center justify-between z-10">
           <h2 className="text-xs font-semibold text-cyan-500/80 uppercase tracking-widest">Sources</h2>
-          <button className="p-1.5 hover:bg-cyan-900/40 rounded-md text-cyan-400/70 transition-colors">
-            <Upload size={16} />
-          </button>
+          <div>
+            <input type="file" accept="application/pdf" className="hidden" id="script-upload" onChange={handleFileUpload} />
+            <label htmlFor="script-upload" className="cursor-pointer flex p-1.5 hover:bg-cyan-900/40 rounded-md text-cyan-400/70 transition-colors">
+              <Upload size={16} />
+            </label>
+          </div>
         </div>
         
         <div className="flex-1 overflow-y-auto p-4 space-y-3 z-10">
@@ -147,29 +174,71 @@ function App() {
             <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-blue-900/10 rounded-full blur-3xl pointer-events-none" />
 
             {/* Messages/Analysis Output */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 z-10 w-full">
-              <div className="flex flex-col items-center justify-center w-full mt-6">
-                
-                {/* Welcome Card */}
-                <div className="bg-[#0A0F1E] p-6 rounded-2xl border border-cyan-800/40 shadow-glow-subtle relative overflow-hidden group w-full max-w-lg">
-                  {/* Glowing Border effect */}
-                  <div className="absolute inset-0 border-2 rounded-2xl border-transparent bg-gradient-to-br from-blue-600/30 via-cyan-400/20 to-emerald-400/10 pointer-events-none opacity-50 group-hover:opacity-100 transition-opacity" style={{ maskImage: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'exclude', WebkitMaskComposite: 'xor', padding: '1px' }}></div>
-                  
-                  <div className="flex items-start gap-4 relative z-10">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-900 to-cyan-900 flex items-center justify-center border border-cyan-500/30 shadow-[0_0_15px_rgba(0,255,255,0.2)]">
-                      <Bot size={20} className="text-cyan-300" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-semibold text-cyan-50 mb-1">System Initialize</h3>
-                      <p className="text-xs text-cyan-200/60 leading-relaxed font-light">
-                        Welcome to the ITS TV Storyboard Generator. Agentic mode engaged. 
-                        Upload your script in the sources panel, or simply type a prompt below to initiate autonomous scene generation.
-                      </p>
-                    </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 z-10 w-full relative">
+              {isUploading ? (
+                <div className="flex flex-col items-center justify-center h-full w-full mt-20">
+                  <div className="w-10 h-10 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mb-4" />
+                  <p className="text-cyan-400 text-sm font-medium animate-pulse tracking-wide uppercase">Analyzing Script with LLM...</p>
+                  <p className="text-xs text-cyan-600 mt-2 font-light">Parsing scenes via Llama3...</p>
+                </div>
+              ) : analysisResults ? (
+                <div className="flex flex-col w-full">
+                  <h3 className="text-xs font-semibold text-cyan-500/80 uppercase tracking-widest mb-4 sticky top-0 bg-[#050810] py-2 z-20 border-b border-cyan-900/30">
+                    Extracted Scenes ({analysisResults.length})
+                  </h3>
+                  <div className="space-y-3">
+                    {analysisResults.map((scene, idx) => (
+                      <div 
+                        key={idx} 
+                        className="bg-[#0A0F1E]/80 border border-cyan-800/40 p-4 rounded-xl shadow-md cursor-pointer hover:border-cyan-400/50 hover:shadow-glow-subtle transition-all group relative overflow-hidden"
+                        onClick={() => setPrompt(`Scene ${scene.scene_no} at ${scene.location}: ${scene.description}. Shot: ${scene.shot_type}`)}
+                      >
+                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/5 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out" />
+                        <div className="flex justify-between items-start mb-3 relative z-10">
+                          <span className="text-xs font-bold px-2 py-1 bg-cyan-900/50 text-cyan-300 rounded-md border border-cyan-700/50">
+                            SCENE {scene.scene_no}
+                          </span>
+                          <span className="text-[10px] tracking-wider uppercase bg-emerald-900/20 border border-emerald-500/30 text-emerald-400 px-2 py-1 rounded">
+                            {scene.shot_type}
+                          </span>
+                        </div>
+                        <p className="text-sm text-cyan-100 font-medium mb-1 relative z-10 flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span> {scene.location}
+                        </p>
+                        <p className="text-sm text-cyan-200/70 leading-relaxed font-light relative z-10">
+                          {scene.description}
+                        </p>
+                        <p className="text-[10px] text-cyan-500/0 mt-2 group-hover:text-cyan-500/70 transition-colors uppercase tracking-widest font-semibold relative z-10">
+                          Click to use as prompt
+                        </p>
+                      </div>
+                    ))}
                   </div>
                 </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center w-full mt-6">
+                  
+                  {/* Welcome Card */}
+                  <div className="bg-[#0A0F1E] p-6 rounded-2xl border border-cyan-800/40 shadow-glow-subtle relative overflow-hidden group w-full max-w-lg">
+                    {/* Glowing Border effect */}
+                    <div className="absolute inset-0 border-2 rounded-2xl border-transparent bg-gradient-to-br from-blue-600/30 via-cyan-400/20 to-emerald-400/10 pointer-events-none opacity-50 group-hover:opacity-100 transition-opacity" style={{ maskImage: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'exclude', WebkitMaskComposite: 'xor', padding: '1px' }}></div>
+                    
+                    <div className="flex items-start gap-4 relative z-10">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-900 to-cyan-900 flex items-center justify-center border border-cyan-500/30 shadow-[0_0_15px_rgba(0,255,255,0.2)]">
+                        <Bot size={20} className="text-cyan-300" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-semibold text-cyan-50 mb-1">System Initialize</h3>
+                        <p className="text-xs text-cyan-200/60 leading-relaxed font-light">
+                          Welcome to the ITS TV Storyboard Generator. Agentic mode engaged. 
+                          Upload your script in the sources panel, or simply type a prompt below to initiate autonomous scene generation.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
 
-              </div>
+                </div>
+              )}
             </div>
 
             {/* Input Area */}

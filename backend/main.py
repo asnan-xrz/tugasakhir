@@ -110,8 +110,8 @@ async def upload_script(file: UploadFile = File(...)):
         if not extracted_text.strip():
             raise HTTPException(status_code=400, detail="Could not extract text from the PDF.")
             
-        from services.llm import analyze_script
-        scenes = await analyze_script(extracted_text)
+        from services.llm import analyze_script_to_scenes
+        scenes = await analyze_script_to_scenes(extracted_text)
         
         return {"filename": file.filename, "scenes": scenes}
         
