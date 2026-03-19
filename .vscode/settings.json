@@ -1,0 +1,8 @@
+{
+    "python.defaultInterpreterPath": "/home/firania/anaconda3/envs/agas_skripsi/bin/python",
+    "python.analysis.extraPaths": [
+        "./backend"
+    ],
+    "css.lint.unknownAtRules": "ignore",
+    "css.lint.unknownProperties": "ignore"
+}

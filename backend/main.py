@@ -1,9 +1,10 @@
 from typing import Dict, Any, Optional
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import asyncio
 import uuid
+import fitz
 
 app = FastAPI(title="ITS TV Storyboard API")
 
@@ -89,6 +90,33 @@ def get_task_status(task_id: str):
         status=tasks_db[task_id]["status"],
         result=tasks_db[task_id]["result"]
     )
+
+@app.post("/api/upload-script")
+async def upload_script(file: UploadFile = File(...)):
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+    
+    try:
+        contents = await file.read()
+        pdf_document = fitz.open(stream=contents, filetype="pdf")
+        
+        extracted_text = ""
+        for page_num in range(len(pdf_document)):
+            page = pdf_document[page_num]
+            extracted_text += page.get_text()
+            
+        pdf_document.close()
+        
+        if not extracted_text.strip():
+            raise HTTPException(status_code=400, detail="Could not extract text from the PDF.")
+            
+        from services.llm import analyze_script
+        scenes = await analyze_script(extracted_text)
+        
+        return {"filename": file.filename, "scenes": scenes}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
