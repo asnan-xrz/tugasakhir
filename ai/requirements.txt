@@ -1,21 +1,36 @@
+# --- Web Framework & API ---
 fastapi==0.115.11
 uvicorn==0.34.0
-supabase==2.14.0
-python-dotenv
 pydantic==2.10.5
 httpx==0.28.1
-langchain==0.3.14
-langchain-openai==0.3.0
-langchain-mcp-adapters==0.0.3
-langgraph==0.2.62
-mcp-proxy==0.6.0
-schedule
-psutil==7.0.0
 aiohttp
-fastmcp
-langchain-community==0.3.14
-transformers
+python-dotenv
+
+# --- AI Core & Computer Vision ---
 torch
+torchvision
+torchaudio
+transformers
+diffusers
+accelerate
 pillow
 einops
-torchvision
+
+# --- RAG & Database ---
+chromadb
+sentence-transformers
+pymupdf
+supabase==2.14.0
+
+# --- Agentic Orchestration (LangChain) ---
+langchain==0.3.14
+langchain-community==0.3.14
+langchain-openai==0.3.0
+langgraph==0.2.62
+langchain-mcp-adapters==0.0.3
+mcp-proxy==0.6.0
+fastmcp
+
+# --- Utilities ---
+psutil==7.0.0s
+schedule

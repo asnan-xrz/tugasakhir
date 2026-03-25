@@ -12,6 +12,7 @@ function App() {
   const [backendStatus, setBackendStatus] = useState('Checking...');
   const [analysisResults, setAnalysisResults] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [sourceFiles, setSourceFiles] = useState([]);
 
   // Check backend health on load
   useEffect(() => {
@@ -33,6 +34,10 @@ function App() {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setAnalysisResults(response.data.scenes);
+      setSourceFiles(prev => [
+        { id: Date.now(), name: response.data.filename, sceneCount: response.data.scenes.length },
+        ...prev
+      ]);
     } catch (error) {
       console.error('Upload failed:', error);
       alert('Upload failed: ' + (error.response?.data?.detail || error.message));
@@ -63,8 +68,9 @@ function App() {
             clearInterval(pollInterval);
             setImages(prev => [...prev, { 
               id: taskId, 
-              url: statusRes.data.result.image_url, 
-              prompt: statusRes.data.result.enhanced_prompt 
+              url: statusRes.data.result.image_url.startsWith('http') ? statusRes.data.result.image_url : `${API_URL}${statusRes.data.result.image_url}`,
+              prompt: statusRes.data.result.enhanced_prompt,
+              rag_context: statusRes.data.result.rag_context
             }]);
             setIsGenerating(false);
           } else if (statusRes.data.status === 'failed') {
@@ -108,16 +114,23 @@ function App() {
         </div>
         
         <div className="flex-1 overflow-y-auto p-4 space-y-3 z-10">
-          {/* Example Source item */}
-          <div className="group bg-[#0A0F1E]/80 p-3 rounded-lg border border-cyan-900/30 hover:border-cyan-400 hover:shadow-[0_0_12px_rgba(0,255,255,0.15)] cursor-pointer transition-all flex items-start gap-3 relative overflow-hidden">
-             {/* Glow on hover */}
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/5 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out" />
-            <FileText className="text-cyan-400 mt-0.5 shrink-0" size={16} />
-            <div>
-              <p className="text-sm text-slate-200 font-medium group-hover:text-cyan-50 transition-colors">Episode_1_Script.txt</p>
-              <p className="text-[10px] text-cyan-600/70 mt-1 uppercase tracking-wider font-semibold">Ready for context</p>
+          {sourceFiles.length === 0 ? (
+            <div className="text-center p-4 border border-dashed border-cyan-900/40 rounded-lg bg-[#0A0F1E]/50">
+              <p className="text-xs text-cyan-600/70 font-medium">No scripts uploaded yet</p>
             </div>
-          </div>
+          ) : (
+            sourceFiles.map((src) => (
+              <div key={src.id} className="group bg-[#0A0F1E]/80 p-3 rounded-lg border border-cyan-900/30 hover:border-cyan-400 hover:shadow-[0_0_12px_rgba(0,255,255,0.15)] cursor-pointer transition-all flex items-start gap-3 relative overflow-hidden">
+                 {/* Glow on hover */}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/5 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out" />
+                <FileText className="text-cyan-400 mt-0.5 shrink-0" size={16} />
+                <div className="overflow-hidden">
+                  <p className="text-sm text-slate-200 font-medium group-hover:text-cyan-50 transition-colors truncate">{src.name}</p>
+                  <p className="text-[10px] text-cyan-600/70 mt-1 uppercase tracking-wider font-semibold">{src.sceneCount} scenes extracted</p>
+                </div>
+              </div>
+            ))
+          )}
         </div>
         
         {/* Settings/Info Area */}
@@ -320,14 +333,26 @@ function App() {
               ) : (
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 h-full content-start">
                   {images.map((img) => (
-                    <div key={img.id} className="group relative rounded-2xl overflow-hidden border border-[#0A1A2F] bg-[#050810] shadow-[0_10px_30px_rgba(0,0,0,0.5)] transition-all hover:border-cyan-800/60 hover:shadow-glow-subtle">
-                      <div className="aspect-video bg-[#020409] relative">
+                    <div key={img.id} className="group relative rounded-2xl overflow-hidden border border-[#0A1A2F] bg-[#050810] shadow-[0_10px_30px_rgba(0,0,0,0.5)] transition-all hover:border-cyan-800/60 hover:shadow-glow-subtle flex flex-col h-full">
+                      <div className="aspect-video bg-[#020409] relative shrink-0">
                         <img src={img.url} alt="Generated frame" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-5">
                           <p className="text-xs text-cyan-50 font-light leading-relaxed">{img.prompt}</p>
                         </div>
                       </div>
-                      <div className="p-4 bg-[#0A0F1E] border-t border-[#0A1A2F] flex justify-between items-center">
+                      
+                      {img.rag_context && (
+                        <div className="p-4 bg-[#0A1A2F]/30 border-t border-[#0A1A2F] flex-1">
+                           <h4 className="text-[10px] text-emerald-500/80 uppercase tracking-widest font-semibold mb-1 flex items-center gap-1.5">
+                             <Search size={10} /> Grounding Context (RAG)
+                           </h4>
+                           <p className="text-xs text-cyan-200/60 leading-relaxed font-light line-clamp-3">
+                             {img.rag_context}
+                           </p>
+                        </div>
+                      )}
+
+                      <div className="p-4 bg-[#0A0F1E] border-t border-[#0A1A2F] flex justify-between items-center shrink-0">
                         <span className="text-xs font-semibold uppercase tracking-widest text-cyan-600/70">Frame {images.indexOf(img) + 1}</span>
                         <button className="text-[11px] uppercase tracking-wider font-semibold text-emerald-400 hover:text-emerald-300 transition-colors">Export High-Res</button>
                       </div>

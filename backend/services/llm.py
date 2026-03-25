@@ -46,7 +46,8 @@ Script:
                     "model": "llama3",
                     "prompt": prompt,
                     "stream": False,
-                    "format": "json"
+                    "format": "json",
+                    "keep_alive": 0
                 }
             )
             response.raise_for_status()

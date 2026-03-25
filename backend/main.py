@@ -1,18 +1,34 @@
+import os
+from dotenv import load_dotenv
+
+# Load config.env before initializing the app so HuggingFace gets HF_TOKEN
+config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.env")
+load_dotenv(config_path)
+
 from typing import Dict, Any, Optional
 from fastapi import FastAPI, BackgroundTasks, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import asyncio
 import uuid
 import fitz
 
+from services.llm import analyze_script_to_scenes, enhance_prompt
+from services.rag import get_visual_context
+from services.diffusion import generate_image
+
 app = FastAPI(title="ITS TV Storyboard API")
+
+# Ensure output directory exists before mounting
+os.makedirs("outputs", exist_ok=True)
+app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
 
 # Setup CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], # Allow all for development
-    allow_credentials=False, # Must be False if allow_origins is ["*"]
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -28,37 +44,40 @@ class TaskStatusResponse(BaseModel):
     status: str
     result: Optional[Dict[str, Any]] = None
 
+# Semaphore untuk membatasi proses GPU agar tidak concurrent memory OOM pada RTX 3050 (6GB)
+gpu_semaphore = asyncio.Semaphore(1)
+
 async def async_generate_storyboard(task_id: str, prompt: str):
     """
-    Background Task to handle text-to-image generation asynchronously.
-    This prevents the main event loop from blocking while the RTX 3050 processes the request.
+    Background Task to handle text-to-image generation asynchronously inside a GPU queue.
     """
-    try:
-        tasks_db[task_id]["status"] = "processing"
-        
-        # TODO: integrate Ollama here to enhance prompt
-        # from services.llm import enhance_prompt
-        # enhanced_prompt = await enhance_prompt(prompt)
-        
-        # Simulate LLM processing time
-        await asyncio.sleep(2)
-        
-        # TODO: integrate Diffusers here to generate image
-        # from services.diffusion import generate_image
-        # image_url = await generate_image(enhanced_prompt)
-        
-        # Simulate rendering time
-        await asyncio.sleep(3)
-        
-        # Fake successful response
-        tasks_db[task_id]["status"] = "completed"
-        tasks_db[task_id]["result"] = {
-            "image_url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop",
-            "enhanced_prompt": prompt + " (enhanced)"
-        }
-    except Exception as e:
-        tasks_db[task_id]["status"] = "failed"
-        tasks_db[task_id]["result"] = {"error": str(e)}
+    async with gpu_semaphore: # Masuk antrean GPU
+        try:
+            tasks_db[task_id]["status"] = "processing"
+            
+            print(f"[Task {task_id}] Fetching visual context via RAG...")
+            visual_context = await get_visual_context(prompt)
+            
+            print(f"[Task {task_id}] Enhancing prompt via LLM...")
+            contextual_prompt = f"{prompt}. {visual_context}" if visual_context else prompt
+            enhanced_prompt = await enhance_prompt(contextual_prompt)
+            
+            print(f"[Task {task_id}] Queueing Stable Diffusion Generation...")
+            output_filename = f"outputs/task_{task_id}.png"
+            image_path = await generate_image(enhanced_prompt, output_filename)
+            
+            print(f"[Task {task_id}] Generation completed successfully!")
+            tasks_db[task_id]["status"] = "completed"
+            tasks_db[task_id]["result"] = {
+                "image_url": f"/{output_filename}",
+                "enhanced_prompt": enhanced_prompt,
+                "rag_context": visual_context
+            }
+            
+        except Exception as e:
+            print(f"[Task {task_id}] Error in generation queue: {e}")
+            tasks_db[task_id]["status"] = "failed"
+            tasks_db[task_id]["result"] = {"error": str(e)}
 
 @app.get("/")
 def read_root():

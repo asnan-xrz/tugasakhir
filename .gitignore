@@ -1,0 +1,24 @@
+# Folder Dataset & File Biner
+images_its/
+ai/*.zip
+dataset/
+
+# Python Virtual Environment
+env/
+venv/
+.env
+
+# Python Cache
+__pycache__/
+*.py[cod]
+
+# VS Code Settings
+.vscode/
+
+# Vector DB & Output Generasi (Stable Diffusion)
+chroma_db/
+outputs/
+
+# Environment Secrets
+config.env
+.env
