@@ -13,14 +13,15 @@ torchaudio
 transformers
 diffusers
 accelerate
+xformers
 pillow
 einops
+opencv
 
 # --- RAG & Database ---
 chromadb
 sentence-transformers
 pymupdf
-supabase==2.14.0
 
 # --- Agentic Orchestration (LangChain) ---
 langchain==0.3.14

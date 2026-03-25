@@ -21,4 +21,4 @@ outputs/
 
 # Environment Secrets
 config.env
-.env
+.envbackend/services/*.pb

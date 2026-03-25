@@ -51,6 +51,44 @@ def _query_rag_sync(scene_text: str) -> str:
         print(f"RAG Error: {e}")
     return ""
 
+def ingest_csv(csv_path: str, batch_size: int = 1000):
+    """
+    Memproses file CSV dataset gambar (delimiter '|') menjadi embeddings di ChromaDB.
+    """
+    if not os.path.exists(csv_path):
+        print(f"File {csv_path} tidak ditemukan.")
+        return
+    
+    docs = []
+    ids = []
+    
+    import csv
+    print(f"Mulai membaca {csv_path}...")
+    with open(csv_path, 'r', encoding='utf-8') as f:
+        reader = csv.DictReader(f, delimiter='|')
+        # Handle jika header ada spasi atau beda case
+        for i, row in enumerate(reader):
+            caption = row.get('caption')
+            if not caption:
+                continue
+                
+            caption = caption.strip()
+            if len(caption) > 5:
+                docs.append(caption)
+                img_name = row.get('Image_name', f'img_{i}').replace('.jpg', '')
+                cap_num = row.get('caption_number', '0')
+                ids.append(f"{img_name}_cap{cap_num}_{i}")
+                
+            if len(docs) >= batch_size:
+                collection.upsert(documents=docs, ids=ids)
+                print(f"Berhasil upsert {batch_size} caption...")
+                docs = []
+                ids = []
+                
+        if docs:
+            collection.upsert(documents=docs, ids=ids)
+            print(f"Berhasil upsert sisa {len(docs)} caption. Ingestion CSV selesai.")
+
 async def get_visual_context(scene_text: str) -> str:
     """
     Retrieves relevant text segments from ChromaDB based on a query.

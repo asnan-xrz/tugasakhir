@@ -79,6 +79,100 @@ async def async_generate_storyboard(task_id: str, prompt: str):
             tasks_db[task_id]["status"] = "failed"
             tasks_db[task_id]["result"] = {"error": str(e)}
 
+class UpscaleRequest(BaseModel):
+    task_id: str
+
+async def async_upscale_image(task_id: str):
+    try:
+        if task_id not in tasks_db:
+             raise ValueError("Original task not found")
+        
+        orig_url = tasks_db[task_id]["result"]["image_url"]
+        local_input_path = orig_url.lstrip("/") 
+        local_output_path = f"outputs/upscaled_{task_id}.png"
+        
+        from services.upscale import upscale_image_sync
+        await asyncio.to_thread(upscale_image_sync, local_input_path, local_output_path)
+        
+        tasks_db[task_id]["status"] = "upscaled"
+        tasks_db[task_id]["result"]["upscaled_image_url"] = f"/{local_output_path}"
+        
+    except Exception as e:
+        tasks_db[task_id]["status"] = "upscale_failed"
+        tasks_db[task_id]["result"] = {"error": str(e)}
+
+@app.post("/api/upscale", response_model=TaskStatusResponse)
+async def start_upscale(req: UpscaleRequest, background_tasks: BackgroundTasks):
+    if req.task_id not in tasks_db:
+        raise HTTPException(status_code=404, detail="Task not found")
+        
+    tasks_db[req.task_id]["status"] = "upscaling"
+    background_tasks.add_task(async_upscale_image, req.task_id)
+    return TaskStatusResponse(task_id=req.task_id, status="upscaling")
+
+class UpscaleRequest(BaseModel):
+    task_id: str
+
+async def async_upscale_image(task_id: str):
+    try:
+        if task_id not in tasks_db:
+             raise ValueError("Original task not found")
+        
+        orig_url = tasks_db[task_id]["result"]["image_url"]
+        local_input_path = orig_url.lstrip("/") 
+        local_output_path = f"outputs/upscaled_{task_id}.png"
+        
+        from services.upscale import upscale_image_sync
+        await asyncio.to_thread(upscale_image_sync, local_input_path, local_output_path)
+        
+        tasks_db[task_id]["status"] = "upscaled"
+        tasks_db[task_id]["result"]["upscaled_image_url"] = f"/{local_output_path}"
+        
+    except Exception as e:
+        tasks_db[task_id]["status"] = "upscale_failed"
+        tasks_db[task_id]["result"] = {"error": str(e)}
+
+@app.post("/api/upscale", response_model=TaskStatusResponse)
+async def start_upscale(req: UpscaleRequest, background_tasks: BackgroundTasks):
+    if req.task_id not in tasks_db:
+        raise HTTPException(status_code=404, detail="Task not found")
+        
+    tasks_db[req.task_id]["status"] = "upscaling"
+    background_tasks.add_task(async_upscale_image, req.task_id)
+    return TaskStatusResponse(task_id=req.task_id, status="upscaling")
+
+class UpscaleRequest(BaseModel):
+    task_id: str
+
+async def async_upscale_image(task_id: str):
+    try:
+        if task_id not in tasks_db:
+             raise ValueError("Original task not found")
+        
+        orig_url = tasks_db[task_id]["result"]["image_url"]
+        local_input_path = orig_url.lstrip("/") 
+        local_output_path = f"outputs/upscaled_{task_id}.png"
+        
+        from services.upscale import upscale_image_sync
+        await asyncio.to_thread(upscale_image_sync, local_input_path, local_output_path)
+        
+        tasks_db[task_id]["status"] = "upscaled"
+        tasks_db[task_id]["result"]["upscaled_image_url"] = f"/{local_output_path}"
+        
+    except Exception as e:
+        print(f"Upscale error: {e}")
+        tasks_db[task_id]["status"] = "upscale_failed"
+        tasks_db[task_id]["result"]["error"] = str(e)
+
+@app.post("/api/upscale", response_model=TaskStatusResponse)
+async def start_upscale(req: UpscaleRequest, background_tasks: BackgroundTasks):
+    if req.task_id not in tasks_db:
+        raise HTTPException(status_code=404, detail="Task not found")
+        
+    tasks_db[req.task_id]["status"] = "upscaling"
+    background_tasks.add_task(async_upscale_image, req.task_id)
+    return TaskStatusResponse(task_id=req.task_id, status="upscaling")
+
 @app.get("/")
 def read_root():
     return {"message": "ITS TV Storyboard API is running. Hardware Profile: RTX 3050 Async Mode."}
@@ -109,6 +203,14 @@ def get_task_status(task_id: str):
         status=tasks_db[task_id]["status"],
         result=tasks_db[task_id]["result"]
     )
+
+@app.post("/api/ingest-csv")
+async def api_ingest_csv(background_tasks: BackgroundTasks):
+    from services.rag import ingest_csv
+    import os
+    csv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ai", "caption.csv")
+    background_tasks.add_task(ingest_csv, csv_path)
+    return {"message": "CSV ingestion started in background"}
 
 @app.post("/api/upload-script")
 async def upload_script(file: UploadFile = File(...)):

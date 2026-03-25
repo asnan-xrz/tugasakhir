@@ -93,6 +93,50 @@ function App() {
     }
   };
 
+  const handleExportHighRes = async (imgId) => {
+    setImages(prev => prev.map(img => img.id === imgId ? { ...img, isUpscaling: true } : img));
+    try {
+      await axios.post(`${API_URL}/api/upscale`, { task_id: imgId });
+      
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusRes = await axios.get(`${API_URL}/api/task/${imgId}`);
+          if (statusRes.data.status === 'upscaled') {
+            clearInterval(pollInterval);
+            const newUrl = statusRes.data.result.upscaled_image_url;
+            const absoluteUrl = newUrl.startsWith('http') ? newUrl : `${API_URL}${newUrl}`;
+            
+            // Auto trigger download
+            const link = document.createElement('a');
+            link.href = absoluteUrl;
+            link.download = `HighRes_Frame_${imgId}.png`;
+            link.target = "_blank"; 
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Update image source to the downloaded high-res image
+            setImages(prev => prev.map(img => img.id === imgId ? { ...img, isUpscaling: false, url: absoluteUrl } : img));
+          } else if (statusRes.data.status === 'upscale_failed') {
+             clearInterval(pollInterval);
+             console.error("Upscale failed:", statusRes.data.result.error);
+             setImages(prev => prev.map(img => img.id === imgId ? { ...img, isUpscaling: false } : img));
+             alert("Upscale failed. Check console.");
+          }
+        } catch (pollErr) {
+           console.error("Polling error for upscaling:", pollErr);
+           clearInterval(pollInterval);
+           setImages(prev => prev.map(img => img.id === imgId ? { ...img, isUpscaling: false } : img));
+        }
+      }, 2000);
+      
+    } catch (err) {
+      console.error("Failed to start upscale", err);
+      setImages(prev => prev.map(img => img.id === imgId ? { ...img, isUpscaling: false } : img));
+      alert("Failed to connect to backend for upscaling");
+    }
+  };
+
   return (
     <div className="flex h-screen bg-[#050810] text-slate-200 overflow-hidden font-sans selection:bg-cyan-900 selection:text-cyan-100">
       
@@ -354,7 +398,14 @@ function App() {
 
                       <div className="p-4 bg-[#0A0F1E] border-t border-[#0A1A2F] flex justify-between items-center shrink-0">
                         <span className="text-xs font-semibold uppercase tracking-widest text-cyan-600/70">Frame {images.indexOf(img) + 1}</span>
-                        <button className="text-[11px] uppercase tracking-wider font-semibold text-emerald-400 hover:text-emerald-300 transition-colors">Export High-Res</button>
+                        <button 
+                          onClick={() => handleExportHighRes(img.id)} 
+                          disabled={img.isUpscaling} 
+                          className={`text-[11px] uppercase tracking-wider font-semibold flex items-center gap-2 transition-colors ${img.isUpscaling ? 'text-emerald-500/50 cursor-not-allowed' : 'text-emerald-400 hover:text-emerald-300'}`}
+                        >
+                          {img.isUpscaling ? <div className="w-3 h-3 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /> : null}
+                          {img.isUpscaling ? 'UPSCALING...' : 'EXPORT HIGH-RES'}
+                        </button>
                       </div>
                     </div>
                   ))}
