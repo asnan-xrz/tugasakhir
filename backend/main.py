@@ -13,6 +13,8 @@ from pydantic import BaseModel
 import asyncio
 import uuid
 import fitz
+import torch
+import gc
 
 from services.llm import analyze_script_to_scenes, enhance_prompt
 from services.rag import get_visual_context
@@ -56,10 +58,25 @@ async def async_generate_storyboard(task_id: str, prompt: str):
             tasks_db[task_id]["status"] = "processing"
             
             print(f"[Task {task_id}] Fetching visual context via RAG...")
-            visual_context = await get_visual_context(prompt)
+            visual_contexts = await get_visual_context(prompt)
             
             print(f"[Task {task_id}] Enhancing prompt via LLM...")
-            contextual_prompt = f"{prompt}. {visual_context}" if visual_context else prompt
+            rag_sources = []
+            if visual_contexts:
+                context_parts = []
+                for ctx in visual_contexts:
+                    if ctx['source'] != 'Unknown':
+                        context_parts.append(f"(File: {ctx['source']}): {ctx['text']}")
+                        rag_sources.append(ctx['source'])
+                    else:
+                        context_parts.append(f"{ctx['text']}")
+                
+                context_str = " ".join(context_parts)
+                # Super Prompt Construction
+                contextual_prompt = f"Berdasarkan referensi visual historis ITS TV {context_str}. Gambarlah adegan {prompt} dengan pencahayaan sinematik dan detail yang sama."
+            else:
+                contextual_prompt = prompt
+                
             enhanced_prompt = await enhance_prompt(contextual_prompt)
             
             print(f"[Task {task_id}] Queueing Stable Diffusion Generation...")
@@ -71,13 +88,20 @@ async def async_generate_storyboard(task_id: str, prompt: str):
             tasks_db[task_id]["result"] = {
                 "image_url": f"/{output_filename}",
                 "enhanced_prompt": enhanced_prompt,
-                "rag_context": visual_context
+                "rag_context": visual_contexts,
+                "rag_sources": rag_sources # Menyimpan metadata visual
             }
             
         except Exception as e:
             print(f"[Task {task_id}] Error in generation queue: {e}")
             tasks_db[task_id]["status"] = "failed"
             tasks_db[task_id]["result"] = {"error": str(e)}
+        finally:
+            # PENTING: Membersihkan VRAM pada RTX 3050 (6GB)
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+            print(f"[Task {task_id}] GPU cache cleared to avoid OOM.")
 
 class UpscaleRequest(BaseModel):
     task_id: str

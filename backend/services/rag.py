@@ -39,17 +39,27 @@ def ingest_scripts(directory: str):
         collection.upsert(documents=docs, ids=ids)
         print(f"Berhasil menambahkan {len(docs)} segmen dari {directory} ke vector DB.")
 
-def _query_rag_sync(scene_text: str) -> str:
+def _query_rag_sync(scene_text: str) -> list:
     try:
         results = collection.query(
             query_texts=[scene_text],
             n_results=3 # Mengambil 3 dokumen agar konteks visual lebih kaya
         )
+        context_list = []
         if results and 'documents' in results and results['documents'] and len(results['documents'][0]) > 0:
-            return " ".join(results['documents'][0])
+            for i in range(len(results['documents'][0])):
+                doc = results['documents'][0][i]
+                metadata = {}
+                # Secara aman mengambil metadata
+                if 'metadatas' in results and results['metadatas'] and i < len(results['metadatas'][0]):
+                    metadata = results['metadatas'][0][i]
+                
+                source = metadata.get('image_source', 'Unknown')
+                context_list.append({"text": doc, "source": source})
+            return context_list
     except Exception as e:
         print(f"RAG Error: {e}")
-    return ""
+    return []
 
 def ingest_csv(csv_path: str, batch_size: int = 1000):
     """
@@ -89,9 +99,9 @@ def ingest_csv(csv_path: str, batch_size: int = 1000):
             collection.upsert(documents=docs, ids=ids)
             print(f"Berhasil upsert sisa {len(docs)} caption. Ingestion CSV selesai.")
 
-async def get_visual_context(scene_text: str) -> str:
+async def get_visual_context(scene_text: str) -> list:
     """
-    Retrieves relevant text segments from ChromaDB based on a query.
+    Retrieves relevant text segments and image sources from ChromaDB based on a query.
     Used to ground the scene generation within the context of the uploaded script.
     """
     print(f"Retrieving visual context for: {scene_text}")

@@ -17,6 +17,8 @@ xformers
 pillow
 einops
 opencv
+pandas
+numpy
 
 # --- RAG & Database ---
 chromadb
