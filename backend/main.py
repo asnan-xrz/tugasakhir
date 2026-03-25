@@ -65,17 +65,21 @@ async def async_generate_storyboard(task_id: str, prompt: str):
             if visual_contexts:
                 context_parts = []
                 for ctx in visual_contexts:
+                    # Membatasi panjang teks konteks RAG maksimal 100 karakter agar tidak melebihi limit token CLIP
+                    truncated_text = ctx['text'][:100] + ("..." if len(ctx['text']) > 100 else "")
+                    
                     if ctx['source'] != 'Unknown':
-                        context_parts.append(f"(File: {ctx['source']}): {ctx['text']}")
+                        context_parts.append(f"(File {ctx['source']}: {truncated_text})")
                         rag_sources.append(ctx['source'])
                     else:
-                        context_parts.append(f"{ctx['text']}")
+                        context_parts.append(f"({truncated_text})")
                 
-                context_str = " ".join(context_parts)
-                # Super Prompt Construction
-                contextual_prompt = f"Berdasarkan referensi visual historis ITS TV {context_str}. Gambarlah adegan {prompt} dengan pencahayaan sinematik dan detail yang sama."
+                context_str = ", ".join(context_parts)
+                # Mengubah urutan prompt: Deskripsi Scene dan Shot Type di paling depan,
+                # dan konteks RAG di bagian belakang sebagai pelengkap style.
+                contextual_prompt = f"Scene: {prompt}. Pencahayaan sinematik, kualitas masterpiece. Referensi visual historis ITS TV: {context_str}."
             else:
-                contextual_prompt = prompt
+                contextual_prompt = f"Scene: {prompt}. Pencahayaan sinematik, kualitas masterpiece."
                 
             enhanced_prompt = await enhance_prompt(contextual_prompt)
             
