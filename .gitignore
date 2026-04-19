@@ -23,3 +23,7 @@ outputs/
 config.env
 .envbackend/services/*.pb
 backend/services/*.pb
+
+# Model weights
+backend/models/
+temp_lora_output/
