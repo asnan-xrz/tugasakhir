@@ -13,6 +13,10 @@ function App() {
   const [analysisResults, setAnalysisResults] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [sourceFiles, setSourceFiles] = useState([]);
+  const [currentVisualDesc, setCurrentVisualDesc] = useState('');
+  const [currentScriptDialogue, setCurrentScriptDialogue] = useState('');
+  const [orchestrationStatus, setOrchestrationStatus] = useState('');
+  const [useRag, setUseRag] = useState(true);
 
   // Check backend health on load
   useEffect(() => {
@@ -51,12 +55,22 @@ function App() {
     if (!prompt.trim()) return;
 
     setIsGenerating(true);
+    setOrchestrationStatus('Proses inisialisasi...');
     const currentPrompt = prompt;
+    const currentVis = currentVisualDesc;
+    const currentScript = currentScriptDialogue;
     setPrompt('');
+    setCurrentVisualDesc('');
+    setCurrentScriptDialogue('');
 
     try {
       // 1. Send generation request
-      const startRes = await axios.post(`${API_URL}/api/generate`, { prompt: currentPrompt });
+      const startRes = await axios.post(`${API_URL}/api/generate`, { 
+        prompt: currentPrompt,
+        visual_description: currentVis || null,
+        script_dialogue: currentScript || null,
+        use_rag: useRag
+      });
       const taskId = startRes.data.task_id;
 
       // 2. Poll for status
@@ -68,16 +82,32 @@ function App() {
             clearInterval(pollInterval);
             setImages(prev => [...prev, {
               id: taskId,
-              url: statusRes.data.result.image_url.startsWith('http') ? statusRes.data.result.image_url : `${API_URL}${statusRes.data.result.image_url}`,
+              url: statusRes.data.result.image_url.startsWith('http') 
+                    ? statusRes.data.result.image_url 
+                    : `${API_URL}${statusRes.data.result.image_url.startsWith('/') ? '' : '/'}${statusRes.data.result.image_url}`,
               prompt: statusRes.data.result.enhanced_prompt,
-              rag_context: statusRes.data.result.rag_context
+              original_prompt: currentPrompt,
+              visual_description: statusRes.data.result.visual_description,
+              script_dialogue: statusRes.data.result.script_dialogue,
+              rag_context: statusRes.data.result.rag_context,
+              mode_ablasi: statusRes.data.result.mode_ablasi
             }]);
             setIsGenerating(false);
+            setOrchestrationStatus('');
           } else if (statusRes.data.status === 'failed') {
             clearInterval(pollInterval);
             console.error("Generation failed:", statusRes.data.result.error);
             setIsGenerating(false);
+            setOrchestrationStatus('');
             alert("Generation failed. Check console.");
+          } else if (statusRes.data.status === 'rag_search') {
+            setOrchestrationStatus('Mencari Referensi Latar (RAG)...');
+          } else if (statusRes.data.status === 'skip_rag') {
+            setOrchestrationStatus('Mode Ablasi (Tanpa Grounding)...');
+          } else if (statusRes.data.status === 'diffusion') {
+            setOrchestrationStatus(useRag ? 'Mensintesis Visual (Diffusion)...' : 'Mode Ablasi (Mensintesis Visual)...');
+          } else {
+            setOrchestrationStatus('Proses inisialisasi...');
           }
         } catch (pollErr) {
           console.error("Polling error:", pollErr);
@@ -104,7 +134,9 @@ function App() {
           if (statusRes.data.status === 'upscaled') {
             clearInterval(pollInterval);
             const newUrl = statusRes.data.result.upscaled_image_url;
-            const absoluteUrl = newUrl.startsWith('http') ? newUrl : `${API_URL}${newUrl}`;
+            const absoluteUrl = newUrl.startsWith('http') 
+              ? newUrl 
+              : `${API_URL}${newUrl.startsWith('/') ? '' : '/'}${newUrl}`;
 
             // Auto trigger download
             const link = document.createElement('a');
@@ -142,7 +174,7 @@ function App() {
 
       {/* Sidebar - Source Documents */}
       <div
-        className={`${sidebarOpen ? 'w-64' : 'w-0'} transition-all duration-300 ease-in-out border-r border-[#0A1A2F]/50 bg-gradient-to-b from-[#0A1A2F]/80 to-[#050810] flex flex-col relative overflow-hidden`}
+        className={`${sidebarOpen ? 'w-64' : 'w-0'} transition-all duration-300 ease-in-out border-r border-[#0A1A2F]/50 bg-gradient-to-b from-[#0A1A2F]/80 to-[#050810] flex flex-col relative overflow-hidden print:hidden`}
       >
         {/* Abstract Geometry Top */}
         <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-900/10 rounded-full blur-3xl" />
@@ -195,7 +227,7 @@ function App() {
       <div className="flex-1 flex flex-col h-full overflow-hidden relative">
 
         {/* Header */}
-        <header className="h-14 border-b border-[#0A1A2F]/50 flex items-center justify-between px-4 bg-[#050810]/50 backdrop-blur-md z-20 shrink-0">
+        <header className="h-14 border-b border-[#0A1A2F]/50 flex items-center justify-between px-4 bg-[#050810]/50 backdrop-blur-md z-20 shrink-0 print:hidden">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -225,7 +257,7 @@ function App() {
         <div className="flex-1 flex overflow-hidden">
 
           {/* Analysis/Chat Area */}
-          <div className="w-1/2 flex flex-col min-w-[350px] border-r border-[#0A1A2F] bg-[#050810] relative">
+          <div className="w-[28%] min-w-[320px] max-w-[400px] flex flex-col border-r border-[#0A1A2F] bg-[#050810] relative print:hidden">
 
             {/* Background Ambient Glow */}
             <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-blue-900/10 rounded-full blur-3xl pointer-events-none" />
@@ -235,7 +267,7 @@ function App() {
               {isUploading ? (
                 <div className="flex flex-col items-center justify-center h-full w-full mt-20">
                   <div className="w-10 h-10 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mb-4" />
-                  <p className="text-cyan-400 text-sm font-medium animate-pulse tracking-wide uppercase">Analyzing Script with LLM...</p>
+                  <p className="text-cyan-400 text-sm font-medium animate-pulse tracking-wide uppercase">Menganalisis Naskah...</p>
                   <p className="text-xs text-cyan-600 mt-2 font-light">Parsing scenes via Llama3...</p>
                 </div>
               ) : analysisResults ? (
@@ -248,7 +280,11 @@ function App() {
                       <div
                         key={idx}
                         className="bg-[#0A0F1E]/80 border border-cyan-800/40 p-4 rounded-xl shadow-md cursor-pointer hover:border-cyan-400/50 hover:shadow-glow-subtle transition-all group relative overflow-hidden"
-                        onClick={() => setPrompt(`Scene ${scene.scene_no} at ${scene.location}: ${scene.description}. Shot: ${scene.shot_type}`)}
+                        onClick={() => {
+                          setPrompt(`Scene ${scene.scene_no} at ${scene.location}: ${scene.description}. Shot: ${scene.shot_type}`);
+                          setCurrentVisualDesc(scene.visual_description || '');
+                          setCurrentScriptDialogue(scene.script_dialogue || '');
+                        }}
                       >
                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/5 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out" />
                         <div className="flex justify-between items-start mb-3 relative z-10">
@@ -299,7 +335,27 @@ function App() {
             </div>
 
             {/* Input Area */}
-            <div className="p-6 bg-[#050810] z-10 shrink-0">
+            <div className="p-6 bg-[#050810] z-10 shrink-0 border-t border-cyan-900/30 print:hidden">
+              <div className="flex justify-between items-center mb-3 px-2">
+                <span className="text-xs text-cyan-600 font-semibold uppercase tracking-widest">Generation Settings</span>
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <span className={`text-[10px] uppercase font-bold tracking-wider transition-colors ${useRag ? 'text-cyan-400/80 group-hover:text-cyan-300' : 'text-slate-500 group-hover:text-slate-400'}`}>
+                    Gunakan Grounding RAG (Aset ITS)
+                  </span>
+                  <div className="relative">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only" 
+                      checked={useRag} 
+                      onChange={(e) => setUseRag(e.target.checked)} 
+                      disabled={isGenerating}
+                    />
+                    <div className={`block w-8 h-4 rounded-full transition-colors duration-300 ${useRag ? 'bg-emerald-500/80' : 'bg-[#0A1A2F] border border-slate-700'}`}></div>
+                    <div className={`dot absolute left-1 top-1 bg-white w-2 h-2 rounded-full transition-transform duration-300 ${useRag ? 'transform translate-x-4' : ''}`}></div>
+                  </div>
+                </label>
+              </div>
+
               <div className="relative flex items-center bg-[#0A0F1E] border border-cyan-900/50 rounded-2xl p-2 shadow-[inset_0_2px_10px_rgba(0,255,255,0.02)] focus-within:border-cyan-400/50 focus-within:shadow-[0_0_15px_rgba(0,255,255,0.1),inset_0_2px_15px_rgba(0,255,255,0.05)] transition-all ease-out duration-300 ring-1 ring-black/50">
                 <textarea
                   value={prompt}
@@ -333,23 +389,31 @@ function App() {
           </div>
 
           {/* Canvas Area */}
-          <div className="flex-1 bg-[#020409] flex flex-col relative overflow-hidden">
+          <div className="flex-1 bg-[#020409] flex flex-col relative overflow-hidden print:bg-white">
             {/* Background pattern */}
-            <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, #00FFFF 1px, transparent 0)', backgroundSize: '32px 32px' }}></div>
+            <div className="absolute inset-0 opacity-[0.03] pointer-events-none print:hidden" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, #00FFFF 1px, transparent 0)', backgroundSize: '32px 32px' }}></div>
 
             {/* Canvas Header */}
-            <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-10 bg-gradient-to-b from-[#020409] to-transparent pointer-events-none">
+            <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-10 bg-gradient-to-b from-[#020409] to-transparent pointer-events-none print:hidden">
               <h3 className="text-xs font-semibold uppercase tracking-widest text-cyan-600/50 flex items-center gap-2 drop-shadow-md">
                 <ImageIcon size={14} /> Output Viewer
               </h3>
+              {images.length > 0 && (
+                <button
+                  onClick={() => window.print()}
+                  className="pointer-events-auto flex items-center gap-2 bg-emerald-900/40 hover:bg-emerald-800/60 border border-emerald-500/50 text-emerald-400 px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-colors"
+                >
+                  Export to PDF
+                </button>
+              )}
             </div>
 
             {/* Visualizer Area */}
-            <div className="flex-1 p-8 overflow-y-auto relative z-10 flex flex-col justify-center">
+            <div className="flex-1 p-8 overflow-y-auto relative z-10 flex flex-col pt-16 print:p-0">
 
               {images.length === 0 && !isGenerating ? (
                 // Agentic Floating Empty State Card
-                <div className="mx-auto w-full max-w-md bg-gradient-to-b from-[#0A1A2F]/80 to-[#0A0F1E]/90 rounded-3xl border border-cyan-500/20 p-8 shadow-[0_20px_50px_rgba(0,0,0,0.5),auto_auto_auto_rgba(0,255,255,0.05)_inset] backdrop-blur-xl flex flex-col items-center justify-center relative overflow-hidden group">
+                <div className="mx-auto w-full max-w-md bg-gradient-to-b from-[#0A1A2F]/80 to-[#0A0F1E]/90 rounded-3xl border border-cyan-500/20 p-8 shadow-[0_20px_50px_rgba(0,0,0,0.5),auto_auto_auto_rgba(0,255,255,0.05)_inset] backdrop-blur-xl flex flex-col items-center justify-center relative overflow-hidden group print:hidden">
 
                   {/* Internal Glow Effects */}
                   <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-50"></div>
@@ -375,56 +439,105 @@ function App() {
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 h-full content-start">
-                  {images.map((img) => (
-                    <div key={img.id} className="group relative rounded-2xl overflow-hidden border border-[#0A1A2F] bg-[#050810] shadow-[0_10px_30px_rgba(0,0,0,0.5)] transition-all hover:border-cyan-800/60 hover:shadow-glow-subtle flex flex-col h-full">
-                      <div className="aspect-video bg-[#020409] relative shrink-0">
-                        <img src={img.url} alt="Generated frame" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-5">
-                          <p className="text-xs text-cyan-50 font-light leading-relaxed">{img.prompt}</p>
-                        </div>
-                      </div>
+                <div className="w-full bg-white border border-slate-800 overflow-x-auto shadow-2xl relative text-black">
+                  <table className="w-full text-center text-[11px] whitespace-normal tabular-nums border-collapse border border-slate-800">
+                    <thead className="bg-[#E2E2E2] font-extrabold text-black border-b border-slate-800">
+                      <tr>
+                        <th className="border border-slate-400 p-2 w-[4%]">SCENE<br/><span className="text-[9px] font-normal italic">*No. Scene*</span></th>
+                        <th className="border border-slate-400 p-2 w-[4%]">SHOT<br/><span className="text-[9px] font-normal italic">*No. Shot*</span></th>
+                        <th className="border border-slate-400 p-2 w-[14%]">DESKRIPSI ADEGAN<br/><span className="text-[9px] font-normal italic">*Deskripsi cerita/adegan, alur, mood*</span></th>
+                        <th className="border border-slate-400 p-2 w-[10%]">SCRIPT<br/><span className="text-[9px] font-normal italic">*Dialog atau voice over*</span></th>
+                        <th className="border border-slate-400 p-2 w-[22%]">VISUALISASI DAN REFERENSI<br/><span className="text-[9px] font-normal italic">*Gambaran visual dari adegan*</span></th>
+                        <th className="border border-slate-400 p-2 w-[12%]">DESKRIPSI VISUAL<br/><span className="text-[9px] font-normal italic">*Jenis framing, angle, movement*</span></th>
+                        <th className="border border-slate-400 p-2 w-[6%]">DURASI<br/><span className="text-[9px] font-normal italic">*detik*</span></th>
+                        <th className="border border-slate-400 p-2 w-[8%]">TRANSISI<br/><span className="text-[9px] font-normal italic">*Jenis transisi*</span></th>
+                        <th className="border border-slate-400 p-2 w-[10%]">AUDIO<br/><span className="text-[9px] font-normal italic">*SFX / BGM*</span></th>
+                        <th className="border border-slate-400 p-2 w-[10%]">KETERANGAN<br/><span className="text-[9px] font-normal italic">*Lokasi*</span></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {images.map((img, index) => {
+                        // Extracting some logical chunks if possible, else falling back gracefully
+                        const cleanedPrompt = img.prompt.replace(/masterpiece/gi, '')
+                                                        .replace(/high resolution/gi, '')
+                                                        .replace(/highly detailed/gi, '')
+                                                        .replace(/8k/gi, '')
+                                                        .replace(/cinematic lighting/gi, '')
+                                                        .replace(/,/g, ' ')
+                                                        .replace(/\s+/g, ' ').trim();
+                                                        
+                        // Convert integer index to alphabetical shot identifier (A, B, C...)
+                        const shotLetter = String.fromCharCode(65 + (index % 26));
 
-                      {img.rag_context && (
-                        <div className="p-4 bg-[#0A1A2F]/30 border-t border-[#0A1A2F] flex-1">
-                          <h4 className="text-[10px] text-emerald-500/80 uppercase tracking-widest font-semibold mb-1 flex items-center gap-1.5">
-                            <Search size={10} /> Grounding Context (RAG)
-                          </h4>
-                          <p className="text-xs text-cyan-200/60 leading-relaxed font-light line-clamp-3">
-                            {Array.isArray(img.rag_context)
-                              ? img.rag_context.map((ctx, i) => `${ctx.source !== 'Unknown' ? `[${ctx.source}] ` : ''}${ctx.text}`).join(' • ')
-                              : img.rag_context}
-                          </p>
-                        </div>
+                        // Attempt to extract duration/transition/script details from prompt (Dummy placeholders for perfection)
+                        const durationMatch = img.original_prompt?.match(/(\d+)s/i);
+                        const duration = durationMatch ? durationMatch[0] : '3s';
+                        const transitionMatch = img.original_prompt?.match(/cut to cut|fade|crossfade/i);
+                        const transition = transitionMatch ? transitionMatch[0].toLowerCase() : 'cut to cut';
+
+                        return (
+                          <tr key={img.id} className="transition-colors hover:bg-slate-50">
+                            <td className="px-2 py-4 align-middle border border-slate-400 font-bold text-sm">1</td>
+                            <td className="px-2 py-4 align-middle border border-slate-400 font-bold text-sm">{shotLetter}</td>
+                            <td className="px-3 py-4 align-top border border-slate-400 text-left font-medium">
+                              {img.original_prompt ? img.original_prompt : cleanedPrompt}
+                            </td>
+                            <td className="px-2 py-4 align-top border border-slate-400 italic text-slate-800 font-medium">
+                              {img.script_dialogue ? `VO: "${img.script_dialogue}"` : '-'}
+                            </td>
+                            <td className="px-3 py-4 align-top border border-slate-400">
+                              <div className="relative rounded-sm overflow-hidden border border-slate-400 bg-black min-h-[120px] shadow-sm flex items-center justify-center">
+                                <img src={img.url} alt={`Scene ${index + 1}`} className="w-full h-auto object-cover max-h-[160px]" onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/512x288?text=Image+Load+Error'; }} />
+                                <button
+                                  onClick={() => handleExportHighRes(img.id)}
+                                  disabled={img.isUpscaling}
+                                  className={`absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/60 backdrop-blur-md rounded border border-emerald-500/30 text-[8px] uppercase font-bold transition-all print:hidden
+                                    ${img.isUpscaling ? 'text-emerald-500/50 cursor-not-allowed' : 'text-emerald-400 hover:bg-emerald-900/80 hover:text-emerald-200'}`}
+                                >
+                                  {img.isUpscaling ? 'UPSCALING...' : 'HI-RES'}
+                                </button>
+                              </div>
+                              {img.rag_context && !img.mode_ablasi && (
+                                <div className="mt-2 text-[8px] text-left text-slate-700 leading-tight">
+                                  <strong>RAG refs:</strong> {Array.isArray(img.rag_context) ? img.rag_context.map(ctx => ctx.source).join(', ') : 'Context Used'}
+                                </div>
+                              )}
+                              {img.mode_ablasi && (
+                                <div className="mt-2 text-[9px] text-rose-700 bg-rose-100 uppercase font-bold border border-rose-300 rounded px-1 py-0.5 inline-block tracking-widest text-center w-full">
+                                  Ablation Mode (No RAG)
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-2 py-4 align-middle border border-slate-400 font-medium">
+                              {img.visual_description || 'N/A'}
+                            </td>
+                            <td className="px-2 py-4 align-middle border border-slate-400">
+                              {duration}
+                            </td>
+                            <td className="px-2 py-4 align-middle border border-slate-400">
+                              {transition}
+                            </td>
+                            <td className="px-2 py-4 align-top border border-slate-400 text-left">
+                              -
+                            </td>
+                            <td className="px-2 py-4 align-middle border border-slate-400 font-medium">
+                              Lokasi
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {isGenerating && (
+                        <tr>
+                          <td colSpan="10" className="px-4 py-12 text-center bg-slate-50 border border-slate-400 print:hidden">
+                            <div className="flex flex-col items-center justify-center space-y-3">
+                               <Sparkles size={24} className="text-cyan-600 animate-pulse" />
+                               <span className="text-xs font-bold uppercase tracking-widest text-slate-800 animate-pulse">{orchestrationStatus || 'Synthesizing Visuals'}</span>
+                            </div>
+                          </td>
+                        </tr>
                       )}
-
-                      <div className="p-4 bg-[#0A0F1E] border-t border-[#0A1A2F] flex justify-between items-center shrink-0">
-                        <span className="text-xs font-semibold uppercase tracking-widest text-cyan-600/70">Frame {images.indexOf(img) + 1}</span>
-                        <button
-                          onClick={() => handleExportHighRes(img.id)}
-                          disabled={img.isUpscaling}
-                          className={`text-[11px] uppercase tracking-wider font-semibold flex items-center gap-2 transition-colors ${img.isUpscaling ? 'text-emerald-500/50 cursor-not-allowed' : 'text-emerald-400 hover:text-emerald-300'}`}
-                        >
-                          {img.isUpscaling ? <div className="w-3 h-3 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /> : null}
-                          {img.isUpscaling ? 'UPSCALING...' : 'EXPORT HIGH-RES'}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-
-                  {isGenerating && (
-                    <div className="rounded-2xl overflow-hidden border border-cyan-500/30 bg-[#0A0F1E] shadow-[0_0_20px_rgba(0,255,255,0.05)] relative aspect-video flex flex-col items-center justify-center group">
-                      <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'linear-gradient(0deg, transparent 24%, rgba(0, 255, 255, .3) 25%, rgba(0, 255, 255, .3) 26%, transparent 27%, transparent 74%, rgba(0, 255, 255, .3) 75%, rgba(0, 255, 255, .3) 76%, transparent 77%, transparent), linear-gradient(90deg, transparent 24%, rgba(0, 255, 255, .3) 25%, rgba(0, 255, 255, .3) 26%, transparent 27%, transparent 74%, rgba(0, 255, 255, .3) 75%, rgba(0, 255, 255, .3) 76%, transparent 77%, transparent)', backgroundSize: '50px 50px' }}></div>
-
-                      <div className="absolute inset-0">
-                        {/* Scanner effect (Subtle Agentic) */}
-                        <div className="w-full h-1 bg-cyan-400/80 shadow-[0_0_25px_rgba(0,255,255,0.8)] absolute top-0 animate-[scan_3s_ease-in-out_infinite]" />
-                      </div>
-                      <Sparkles size={28} className="text-cyan-400/60 mb-4 animate-pulse relative z-10" />
-                      <p className="text-xs font-semibold uppercase tracking-widest text-cyan-300 animate-pulse relative z-10">Synthesizing Visuals</p>
-                      <p className="text-[10px] text-emerald-500/60 mt-2 uppercase tracking-widest relative z-10">Neural Rendering Active</p>
-                    </div>
-                  )}
+                    </tbody>
+                  </table>
                 </div>
               )}
 

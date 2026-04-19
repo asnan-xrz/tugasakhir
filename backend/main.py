@@ -40,6 +40,9 @@ tasks_db: Dict[str, Dict[str, Any]] = {}
 
 class GenerationRequest(BaseModel):
     prompt: str
+    visual_description: Optional[str] = None
+    script_dialogue: Optional[str] = None
+    use_rag: bool = True
 
 class TaskStatusResponse(BaseModel):
     task_id: str
@@ -49,7 +52,7 @@ class TaskStatusResponse(BaseModel):
 # Semaphore untuk membatasi proses GPU agar tidak concurrent memory OOM pada RTX 3050 (6GB)
 gpu_semaphore = asyncio.Semaphore(1)
 
-async def async_generate_storyboard(task_id: str, prompt: str):
+async def async_generate_storyboard(task_id: str, prompt: str, visual_description: str = None, use_rag: bool = True, script_dialogue: str = None):
     """
     Background Task to handle text-to-image generation asynchronously inside a GPU queue.
     """
@@ -57,12 +60,19 @@ async def async_generate_storyboard(task_id: str, prompt: str):
         try:
             tasks_db[task_id]["status"] = "processing"
             
-            print(f"[Task {task_id}] Fetching visual context via RAG...")
-            visual_contexts = await get_visual_context(prompt)
-            
-            print(f"[Task {task_id}] Enhancing prompt via LLM...")
             rag_sources = []
             image_reference = None
+            if use_rag:
+                print(f"[Task {task_id}] Fetching visual context via RAG...")
+                tasks_db[task_id]["status"] = "rag_search"
+                visual_contexts = await get_visual_context(prompt)
+            else:
+                print(f"[Task {task_id}] Ablation Mode: Skipping RAG...")
+                tasks_db[task_id]["status"] = "skip_rag"
+                visual_contexts = None
+            
+            print(f"[Task {task_id}] Enhancing prompt via LLM...")
+            
             if visual_contexts:
                 context_parts = []
                 for ctx in visual_contexts:
@@ -94,15 +104,17 @@ async def async_generate_storyboard(task_id: str, prompt: str):
                         context_parts.append(f"({truncated_text})")
                 
                 context_str = ", ".join(context_parts)
-                # Mengubah urutan prompt: Deskripsi Scene dan Shot Type di paling depan,
-                # dan konteks RAG di bagian belakang sebagai pelengkap style.
-                contextual_prompt = f"Scene: {prompt}. Pencahayaan sinematik, kualitas masterpiece. Referensi visual historis ITS TV: {context_str}."
             else:
-                contextual_prompt = f"Scene: {prompt}. Pencahayaan sinematik, kualitas masterpiece."
+                context_str = ""
                 
-            enhanced_prompt = await enhance_prompt(contextual_prompt)
+            enhanced_prompt = await enhance_prompt(
+                base_prompt=prompt,
+                visual_description=visual_description,
+                context_str=context_str
+            )
             
             print(f"[Task {task_id}] Queueing Stable Diffusion Generation...")
+            tasks_db[task_id]["status"] = "diffusion"
             output_filename = f"outputs/task_{task_id}.png"
             image_path = await generate_image(enhanced_prompt, output_filename, image_reference)
             
@@ -111,8 +123,11 @@ async def async_generate_storyboard(task_id: str, prompt: str):
             tasks_db[task_id]["result"] = {
                 "image_url": f"/{output_filename}",
                 "enhanced_prompt": enhanced_prompt,
+                "visual_description": visual_description,
                 "rag_context": visual_contexts,
-                "rag_sources": rag_sources # Menyimpan metadata visual
+                "rag_sources": rag_sources, # Menyimpan metadata visual
+                "mode_ablasi": not use_rag,
+                "script_dialogue": script_dialogue
             }
             
         except Exception as e:
@@ -233,7 +248,7 @@ async def start_generation(req: GenerationRequest, background_tasks: BackgroundT
     tasks_db[task_id] = {"status": "pending", "result": None}
     
     # Offload heavy AI processing to background task
-    background_tasks.add_task(async_generate_storyboard, task_id, req.prompt)
+    background_tasks.add_task(async_generate_storyboard, task_id, req.prompt, req.visual_description, req.use_rag, req.script_dialogue)
     
     return TaskStatusResponse(task_id=task_id, status="pending")
 
@@ -280,6 +295,9 @@ async def upload_script(file: UploadFile = File(...)):
             
         from services.llm import analyze_script_to_scenes
         scenes = await analyze_script_to_scenes(extracted_text)
+        
+        if not scenes:
+            raise HTTPException(status_code=400, detail="Gagal mengekstrak scene dari naskah. Silakan coba lagi atau cek format naskah.")
         
         return {"filename": file.filename, "scenes": scenes}
         
