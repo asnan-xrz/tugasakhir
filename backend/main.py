@@ -62,6 +62,7 @@ async def async_generate_storyboard(task_id: str, prompt: str):
             
             print(f"[Task {task_id}] Enhancing prompt via LLM...")
             rag_sources = []
+            image_reference = None
             if visual_contexts:
                 context_parts = []
                 for ctx in visual_contexts:
@@ -71,6 +72,24 @@ async def async_generate_storyboard(task_id: str, prompt: str):
                     if ctx['source'] != 'Unknown':
                         context_parts.append(f"(File {ctx['source']}: {truncated_text})")
                         rag_sources.append(ctx['source'])
+                        
+                        # Set image reference for ControlNet/IP-Adapter (ambil yang pertama valid)
+                        if image_reference is None:
+                            base_dir = os.path.dirname(os.path.dirname(__file__))
+                            img_name = ctx['source']
+                            if not (img_name.lower().endswith('.jpg') or img_name.lower().endswith('.png') or img_name.lower().endswith('.jpeg')):
+                                image_candidates = [
+                                    os.path.join(base_dir, "ai", "images", f"{img_name}.jpg"),
+                                    os.path.join(base_dir, "ai", "images", f"{img_name}.png"),
+                                    os.path.join(base_dir, "ai", "images", f"{img_name}.jpeg")
+                                ]
+                            else:
+                                image_candidates = [os.path.join(base_dir, "ai", "images", img_name)]
+                                
+                            for c_path in image_candidates:
+                                if os.path.exists(c_path):
+                                    image_reference = c_path
+                                    break
                     else:
                         context_parts.append(f"({truncated_text})")
                 
@@ -85,7 +104,7 @@ async def async_generate_storyboard(task_id: str, prompt: str):
             
             print(f"[Task {task_id}] Queueing Stable Diffusion Generation...")
             output_filename = f"outputs/task_{task_id}.png"
-            image_path = await generate_image(enhanced_prompt, output_filename)
+            image_path = await generate_image(enhanced_prompt, output_filename, image_reference)
             
             print(f"[Task {task_id}] Generation completed successfully!")
             tasks_db[task_id]["status"] = "completed"
