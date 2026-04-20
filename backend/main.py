@@ -264,6 +264,19 @@ async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bo
         tasks_db[task_id]["total_frames"] = len(scenes)
         tasks_db[task_id]["log_stream"].append(f"Scripts successfully generated! Total Scenes: {len(scenes)}")
         
+        # PRE-POPULATE Scenes so UI can render the standard Storyboard Table before image synthesis begins!
+        for idx, scene in enumerate(scenes):
+            tasks_db[task_id]["result_scenes"].append({
+                "image_url": None,
+                "enhanced_prompt": "",
+                "original_prompt": f"Scene {scene.get('scene_no', idx+1)} at {scene.get('location', '')}: {scene.get('description', '')}. Shot: {scene.get('shot_type', '')}",
+                "visual_description": scene.get('visual_description', ""),
+                "script_dialogue": scene.get('script_dialogue', ""),
+                "scene_no": scene.get('scene_no', idx + 1),
+                "id": f"{task_id}_{idx+1}",
+                "is_generating": True
+            })
+        
         for idx, scene in enumerate(scenes):
             tasks_db[task_id]["status"] = "processing_frame"
             tasks_db[task_id]["current_frame"] = idx + 1
@@ -286,30 +299,36 @@ async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bo
             if visual_contexts:
                 context_parts = []
                 for ctx in visual_contexts:
-                    context_parts.append(f"{ctx['source']} ({ctx['caption']})")
+                    ctx_text = ctx.get('text', ctx.get('caption', ''))
+                    context_parts.append(f"{ctx.get('source', '')} ({ctx_text})")
                     if not image_reference:
-                        image_reference = os.path.join("ai/images_its", ctx['source'])
-                    rag_sources.append({"source": ctx['source'], "caption": ctx['caption']})
+                        image_reference = os.path.join("ai/images_its", ctx.get('source', ''))
+                    rag_sources.append({"source": ctx.get('source', ''), "caption": ctx_text})
                 context_str = ", ".join(context_parts)
             else:
                 context_str = ""
                 
             enhanced_prompt = await enhance_prompt(prompt, visual_description, context_str)
             
+            # Wait 3 seconds to let Ollama physically drop its model from VRAM 
+            # before initializing PyTorch operations for Stable Diffusion!
+            tasks_db[task_id]["log_stream"].append(f"Frame {idx + 1}: Pausing (3s) to allow Ollama VRAM unload...")
+            await asyncio.sleep(3.0)
+            
             tasks_db[task_id]["log_stream"].append(f"Frame {idx + 1}: Synthesizing Visuals (Diffusion SD 1.5)...")
             async with gpu_semaphore:
                 from services.diffusion import generate_image
-                image_paths = [image_reference] if image_reference and os.path.exists(image_reference) else None
-                image = await generate_image(
-                    prompt=enhanced_prompt,
-                    reference_image_paths=image_paths
-                )
+                output_filename = f"task_{task_id}_frame_{idx+1}.png"
+                output_path = os.path.join("outputs", output_filename)
                 
-            output_filename = f"outputs/task_{task_id}_frame_{idx+1}.png"
-            image.save(output_filename)
+                final_image_path = await generate_image(
+                    prompt=enhanced_prompt,
+                    output_path=output_path,
+                    image_reference=image_reference
+                )
             
             frame_result = {
-                "image_url": f"/{output_filename}",
+                "image_url": f"/outputs/{output_filename}",
                 "enhanced_prompt": enhanced_prompt,
                 "original_prompt": prompt,
                 "visual_description": visual_description,
@@ -319,15 +338,24 @@ async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bo
                 "mode_ablasi": not use_rag,
                 "scene_no": scene.get('scene_no'),
                 "shot_type": scene.get('shot_type'),
-                "id": f"{task_id}_{idx+1}"
+                "id": f"{task_id}_{idx+1}",
+                "is_generating": False
             }
             
             # Since this takes 15 mins, we push incremental results!
-            tasks_db[task_id]["result_scenes"].append(frame_result)
+            tasks_db[task_id]["result_scenes"][idx] = frame_result
             tasks_db[task_id]["log_stream"].append(f"Frame {idx + 1} completed and saved!")
             
             import gc
             gc.collect()
+            
+            import ctypes
+            try:
+                ctypes.CDLL('libc.so.6').malloc_trim(0)
+                tasks_db[task_id]["log_stream"].append(f"Frame {idx + 1}: POSIX System RAM Flushed natively.")
+            except Exception:
+                pass
+                
             import torch
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()

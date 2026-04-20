@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, FileText, Image as ImageIcon, Send, Upload, Settings, PanelLeftClose, PanelLeftOpen, Search, Link as LinkIcon, Sparkles, Terminal, Wand2, BookOpen, Camera, Loader } from 'lucide-react';
+import { Bot, FileText, Image as ImageIcon, Send, Upload, Settings, PanelLeftClose, PanelLeftOpen, Search, Link as LinkIcon, Sparkles, Terminal, Wand2, BookOpen, Camera, Loader, Sun, Moon } from 'lucide-react';
 import axios from 'axios';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -7,6 +7,7 @@ const API_URL = 'http://localhost:8000';
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [theme, setTheme] = useState('dark');
   const [prompt, setPrompt] = useState('');
   const [images, setImages] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -163,6 +164,83 @@ function App() {
     }
   };
 
+  const handleGenerateFullAuto = async () => {
+    if (!concept.trim()) return;
+
+    setIsGenerating(true);
+    setLogStream(['--- INIT: Full Auto Agentic Pipeline ---']);
+    setFullAutoProgress({ current: 0, total: 0 });
+    setImages([]); // Clear previous!
+    
+    try {
+      const startRes = await axios.post(`${API_URL}/api/generate-full`, { 
+        concept: concept.trim(),
+        use_rag: useRag
+      });
+      const taskId = startRes.data.task_id;
+
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusRes = await axios.get(`${API_URL}/api/task/${taskId}`);
+
+          if (statusRes.data.log_stream) {
+            setLogStream(statusRes.data.log_stream);
+          }
+          if (statusRes.data.total_frames) {
+              setFullAutoProgress(prev => ({ ...prev, total: statusRes.data.total_frames, current: statusRes.data.current_frame || 0 }));
+          }
+
+          if (statusRes.data.status === 'processing_frame' || statusRes.data.status === 'generating_script') {
+            setOrchestrationStatus(statusRes.data.log_stream[statusRes.data.log_stream.length - 1] || 'Memproses Automasi...');
+            
+            // PRE-FLIGHT RENDER: React captures the scenes and mounts them to the DOM before generation concludes
+            if (statusRes.data.result_scenes) {
+                const mappedUrls = statusRes.data.result_scenes.map(s => ({
+                    id: s.id || (Math.random().toString()),
+                    prompt: s.prompt || s.enhanced_prompt || "",
+                    original_prompt: s.original_prompt,
+                    script_dialogue: s.script_dialogue,
+                    visual_description: s.visual_description,
+                    scene_no: s.scene_no,
+                    url: s.image_url ? (s.image_url.startsWith('http') ? s.image_url : `${API_URL}${s.image_url}`) : null,
+                    isUpscaling: false,
+                    isGeneratingStatus: s.is_generating !== undefined ? s.is_generating : false
+                }));
+                setImages(mappedUrls);
+            }
+          } else if (statusRes.data.status === 'completed') {
+            clearInterval(pollInterval);
+            setIsGenerating(false);
+            setOrchestrationStatus('');
+            // Final sync
+            if (statusRes.data.result_scenes) {
+                const mappedUrls = statusRes.data.result_scenes.map(s => ({
+                    id: s.id, prompt: s.enhanced_prompt, original_prompt: s.original_prompt,
+                    script_dialogue: s.script_dialogue, visual_description: s.visual_description,
+                    scene_no: s.scene_no, url: s.image_url ? (s.image_url.startsWith('http') ? s.image_url : `${API_URL}${s.image_url}`) : null,
+                    isUpscaling: false, isGeneratingStatus: false
+                }));
+                setImages(mappedUrls);
+            }
+          } else if (statusRes.data.status === 'failed') {
+            clearInterval(pollInterval);
+            setIsGenerating(false);
+            setOrchestrationStatus('');
+            alert("Gagal melakukan full automation: " + (statusRes.data.result?.error || "Unknown"));
+          }
+        } catch (err) {
+          console.error("Poll err", err);
+          clearInterval(pollInterval);
+          setIsGenerating(false);
+        }
+      }, 3000);
+    } catch (e) {
+      console.error("Full Auto error:", e);
+      setIsGenerating(false);
+      alert("Gagal menghubungi server");
+    }
+  };
+
   const handleExportHighRes = async (imgId) => {
     setImages(prev => prev.map(img => img.id === imgId ? { ...img, isUpscaling: true } : img));
     try {
@@ -239,7 +317,16 @@ function App() {
           const tableBody = [];
           for (let i = 0; i < images.length; i++) {
               const imgState = images[i];
-              const base64Img = await getBase64ImageFromUrl(imgState.url);
+              let base64Img = null;
+              
+              if (imgState.url) {
+                  const absoluteUrl = imgState.url.startsWith('http') ? imgState.url : `${API_URL}${imgState.url}`;
+                  try {
+                      base64Img = await getBase64ImageFromUrl(absoluteUrl);
+                  } catch (e) {
+                      console.error("PDF Fetch warn (CORS/404):", e);
+                  }
+              }
               
               const cleanedPrompt = imgState.prompt?.replace(/masterpiece/gi, '')
                                                   .replace(/high resolution/gi, '')
@@ -314,7 +401,7 @@ function App() {
   };
 
   return (
-    <div className="flex h-screen bg-[#050810] text-slate-200 overflow-hidden font-sans selection:bg-cyan-900 selection:text-cyan-100">
+    <div className={`flex h-screen bg-[#050810] text-slate-200 overflow-hidden font-sans selection:bg-cyan-900 selection:text-cyan-100 transition-all duration-700 ease-in-out ${theme === 'light' ? 'theme-light' : ''}`}>
 
       {/* Sidebar - Source Documents */}
       <div
@@ -354,11 +441,21 @@ function App() {
         </div>
 
         {/* Settings/Info Area */}
-        <div className="p-4 border-t border-cyan-900/20 bg-[#050810]/80 z-10">
+        <div className="p-4 border-t border-cyan-900/20 bg-[#050810]/80 z-10 transition-colors">
           <div className="flex justify-between items-center text-sm">
-            <div className="flex items-center gap-2 text-slate-400 hover:text-cyan-300 cursor-pointer transition-colors group">
-              <Settings size={16} className="group-hover:rotate-45 transition-transform duration-300" />
-              <span className="font-medium text-xs">Settings</span>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 text-slate-400 hover:text-cyan-300 cursor-pointer transition-colors group">
+                <Settings size={16} className="group-hover:rotate-45 transition-transform duration-300" />
+                <span className="font-medium text-xs hidden lg:inline">Settings</span>
+              </div>
+              <button 
+                onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
+                className="flex items-center gap-1.5 text-cyan-400 hover:text-cyan-200 border border-cyan-900/40 bg-cyan-900/10 px-2 py-1 rounded transition-colors group"
+                title="Toggle Theme"
+              >
+                {theme === 'dark' ? <Sun size={12} className="group-hover:rotate-45 transition-transform duration-500" /> : <Moon size={12} className="group-hover:-rotate-12 transition-transform duration-500" />}
+                <span className="text-[9px] font-bold tracking-widest uppercase">{theme}</span>
+              </button>
             </div>
             <span className="text-[10px] flex items-center gap-1.5 text-cyan-600/60 uppercase font-semibold">
               RTX ON
@@ -659,7 +756,7 @@ function App() {
                   </p>
                 </div>
               ) : (
-                <div className="w-full bg-white border border-slate-800 overflow-x-auto shadow-2xl relative text-black print-container z-10 flex-1">
+                <div className="w-full bg-[#050810] border-t border-slate-800 overflow-x-auto shadow-2xl relative text-slate-200 print-container z-10 flex-1">
                   
                   {/* Live Stream Terminal Area */}
                   {(inputMode === 'auto' && logStream.length > 0) && (
@@ -679,19 +776,19 @@ function App() {
                     </div>
                   )}
 
-                  <table className="w-full text-center text-[11px] whitespace-normal tabular-nums border-collapse border border-slate-800">
-                    <thead className="bg-[#E2E2E2] font-extrabold text-black border-b border-slate-800">
+                  <table className="w-full text-center text-[11px] whitespace-normal tabular-nums border-collapse border-slate-800">
+                    <thead className="bg-[#0A1A2F] font-extrabold text-cyan-50 border-b border-slate-800">
                       <tr>
-                        <th className="border border-slate-400 p-2 w-[4%]">SCENE<br/><span className="text-[9px] font-normal italic">*No. Scene*</span></th>
-                        <th className="border border-slate-400 p-2 w-[4%]">SHOT<br/><span className="text-[9px] font-normal italic">*No. Shot*</span></th>
-                        <th className="border border-slate-400 p-2 w-[14%]">DESKRIPSI ADEGAN<br/><span className="text-[9px] font-normal italic">*Deskripsi cerita/adegan, alur, mood*</span></th>
-                        <th className="border border-slate-400 p-2 w-[10%]">SCRIPT<br/><span className="text-[9px] font-normal italic">*Dialog atau voice over*</span></th>
-                        <th className="border border-slate-400 p-2 w-[22%]">VISUALISASI DAN REFERENSI<br/><span className="text-[9px] font-normal italic">*Gambaran visual dari adegan*</span></th>
-                        <th className="border border-slate-400 p-2 w-[12%]">DESKRIPSI VISUAL<br/><span className="text-[9px] font-normal italic">*Jenis framing, angle, movement*</span></th>
-                        <th className="border border-slate-400 p-2 w-[6%]">DURASI<br/><span className="text-[9px] font-normal italic">*detik*</span></th>
-                        <th className="border border-slate-400 p-2 w-[8%]">TRANSISI<br/><span className="text-[9px] font-normal italic">*Jenis transisi*</span></th>
-                        <th className="border border-slate-400 p-2 w-[10%]">AUDIO<br/><span className="text-[9px] font-normal italic">*SFX / BGM*</span></th>
-                        <th className="border border-slate-400 p-2 w-[10%]">KETERANGAN<br/><span className="text-[9px] font-normal italic">*Lokasi*</span></th>
+                        <th className="border border-slate-700 p-2 w-[4%]">SCENE<br/><span className="text-[9px] font-normal italic text-cyan-600/60">*No. Scene*</span></th>
+                        <th className="border border-slate-700 p-2 w-[4%]">SHOT<br/><span className="text-[9px] font-normal italic text-cyan-600/60">*No. Shot*</span></th>
+                        <th className="border border-slate-700 p-2 w-[14%]">DESKRIPSI ADEGAN<br/><span className="text-[9px] font-normal italic text-cyan-600/60">*Deskripsi cerita/adegan, alur, mood*</span></th>
+                        <th className="border border-slate-700 p-2 w-[10%]">SCRIPT<br/><span className="text-[9px] font-normal italic text-cyan-600/60">*Dialog atau voice over*</span></th>
+                        <th className="border border-slate-700 p-2 w-[22%]">VISUALISASI DAN REFERENSI<br/><span className="text-[9px] font-normal italic text-cyan-600/60">*Gambaran visual dari adegan*</span></th>
+                        <th className="border border-slate-700 p-2 w-[12%]">DESKRIPSI VISUAL<br/><span className="text-[9px] font-normal italic text-cyan-600/60">*Jenis framing, angle, movement*</span></th>
+                        <th className="border border-slate-700 p-2 w-[6%]">DURASI<br/><span className="text-[9px] font-normal italic text-cyan-600/60">*detik*</span></th>
+                        <th className="border border-slate-700 p-2 w-[8%]">TRANSISI<br/><span className="text-[9px] font-normal italic text-cyan-600/60">*Jenis transisi*</span></th>
+                        <th className="border border-slate-700 p-2 w-[10%]">AUDIO<br/><span className="text-[9px] font-normal italic text-cyan-600/60">*SFX / BGM*</span></th>
+                        <th className="border border-slate-700 p-2 w-[10%]">KETERANGAN<br/><span className="text-[9px] font-normal italic text-cyan-600/60">*Lokasi*</span></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800">
@@ -715,26 +812,37 @@ function App() {
                         const transition = transitionMatch ? transitionMatch[0].toLowerCase() : 'cut to cut';
 
                         return (
-                          <tr key={img.id} className="transition-colors hover:bg-slate-50">
-                            <td className="px-2 py-4 align-middle border border-slate-400 font-bold text-sm">1</td>
-                            <td className="px-2 py-4 align-middle border border-slate-400 font-bold text-sm">{shotLetter}</td>
-                            <td className="px-3 py-4 align-top border border-slate-400 text-left font-medium">
+                          <tr key={img.id} className="transition-colors hover:bg-slate-800/40">
+                            <td className="px-2 py-4 align-middle border border-slate-700 font-bold text-sm text-cyan-100">{img.scene_no || index + 1}</td>
+                            <td className="px-2 py-4 align-middle border border-slate-700 font-bold text-sm text-cyan-200">{shotLetter}</td>
+                            <td className="px-3 py-4 align-top border border-slate-700 text-left font-medium text-slate-300">
                               {img.original_prompt ? img.original_prompt : cleanedPrompt}
                             </td>
-                            <td className="px-2 py-4 align-top border border-slate-400 italic text-slate-800 font-medium">
+                            <td className="px-2 py-4 align-top border border-slate-700 italic text-cyan-400 font-medium">
                               {img.script_dialogue ? `VO: "${img.script_dialogue}"` : '-'}
                             </td>
-                            <td className="px-3 py-4 align-top border border-slate-400">
+                            <td className="px-3 py-4 align-top border border-slate-700">
                               <div className="relative rounded-sm overflow-hidden border border-slate-400 bg-black min-h-[120px] shadow-sm flex items-center justify-center">
-                                <img src={img.url} alt={`Scene ${index + 1}`} className="w-full h-auto object-cover max-h-[160px]" onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/512x288?text=Image+Load+Error'; }} />
-                                <button
-                                  onClick={() => handleExportHighRes(img.id)}
-                                  disabled={img.isUpscaling}
-                                  className={`absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/60 backdrop-blur-md rounded border border-emerald-500/30 text-[8px] uppercase font-bold transition-all print:hidden
-                                    ${img.isUpscaling ? 'text-emerald-500/50 cursor-not-allowed' : 'text-emerald-400 hover:bg-emerald-900/80 hover:text-emerald-200'}`}
-                                >
-                                  {img.isUpscaling ? 'UPSCALING...' : 'HI-RES'}
-                                </button>
+                                {img.isGeneratingStatus ? (
+                                    <div className="flex flex-col items-center justify-center p-4 bg-slate-900/50 w-full h-full">
+                                        <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mb-2"></div>
+                                        <span className="text-[9px] text-emerald-400 tracking-widest uppercase font-bold text-center">Mensintesis<br/>Visual...</span>
+                                    </div>
+                                ) : img.url ? (
+                                    <>
+                                        <img src={img.url} alt={`Scene ${index + 1}`} className="w-full h-auto object-cover max-h-[160px]" onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/512x288?text=Image+Load+Error'; }} />
+                                        <button
+                                          onClick={() => handleExportHighRes(img.id)}
+                                          disabled={img.isUpscaling}
+                                          className={`absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/60 backdrop-blur-md rounded border border-emerald-500/30 text-[8px] uppercase font-bold transition-all print:hidden
+                                            ${img.isUpscaling ? 'text-emerald-500/50 cursor-not-allowed' : 'text-emerald-400 hover:bg-emerald-900/80 hover:text-emerald-200'}`}
+                                        >
+                                          {img.isUpscaling ? 'UPSCALING...' : 'HI-RES'}
+                                        </button>
+                                    </>
+                                ) : (
+                                    <span className="text-xs text-slate-600 uppercase font-bold">No Image Rendered</span>
+                                )}
                               </div>
                               {img.rag_context && !img.mode_ablasi && (
                                 <div className="mt-2 text-[8px] text-left text-slate-700 leading-tight">
@@ -747,19 +855,19 @@ function App() {
                                 </div>
                               )}
                             </td>
-                            <td className="px-2 py-4 align-middle border border-slate-400 font-medium">
+                            <td className="px-2 py-4 align-middle border border-slate-700 font-medium text-slate-300">
                               {img.visual_description || 'N/A'}
                             </td>
-                            <td className="px-2 py-4 align-middle border border-slate-400">
+                            <td className="px-2 py-4 align-middle border border-slate-700 text-cyan-300 font-mono">
                               {duration}
                             </td>
-                            <td className="px-2 py-4 align-middle border border-slate-400">
+                            <td className="px-2 py-4 align-middle border border-slate-700 uppercase text-slate-400">
                               {transition}
                             </td>
-                            <td className="px-2 py-4 align-top border border-slate-400 text-left">
+                            <td className="px-2 py-4 align-top border border-slate-700 text-left text-slate-500">
                               -
                             </td>
-                            <td className="px-2 py-4 align-middle border border-slate-400 font-medium">
+                            <td className="px-2 py-4 align-middle border border-slate-700 font-medium text-slate-300">
                               Lokasi
                             </td>
                           </tr>
@@ -767,10 +875,10 @@ function App() {
                       })}
                       {isGenerating && (
                         <tr>
-                          <td colSpan="10" className="px-4 py-12 text-center bg-slate-50 border border-slate-400 print:hidden">
+                          <td colSpan="10" className="px-4 py-12 text-center bg-[#050810] border border-slate-700 print:hidden">
                             <div className="flex flex-col items-center justify-center space-y-3">
                                <Sparkles size={24} className="text-cyan-600 animate-pulse" />
-                               <span className="text-xs font-bold uppercase tracking-widest text-slate-800 animate-pulse">{orchestrationStatus || 'Synthesizing Visuals'}</span>
+                               <span className="text-xs font-bold uppercase tracking-widest text-cyan-400 animate-pulse">{orchestrationStatus || 'Synthesizing Visuals'}</span>
                             </div>
                           </td>
                         </tr>

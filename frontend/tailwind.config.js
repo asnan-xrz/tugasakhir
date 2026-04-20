@@ -8,8 +8,8 @@ export default {
     extend: {
       colors: {
         agentic: {
-          dark: '#050810',
-          panel: '#0A0F1E',
+          dark: '#ffffffff',
+          panel: '#ffffffff',
           blue: '#1e3a8a',
           cyan: '#00FFFF',
           emerald: '#00FFBF',

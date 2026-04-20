@@ -27,3 +27,17 @@ body {
 #root {
   width: 100%;
 }
+
+/* Light Theme Hack via Smart CSS Inversion */
+/* Turns all dark UI (bg-#050810) into soft white, while keeping cyan/emerald hue rotated back to normal */
+.theme-light {
+    filter: invert(1) hue-rotate(180deg);
+}
+
+/* Re-invert absolute assets so they don't look like x-rays */
+.theme-light img,
+.theme-light video,
+.theme-light canvas,
+.theme-light .revert-theme {
+    filter: invert(1) hue-rotate(180deg);
+}
