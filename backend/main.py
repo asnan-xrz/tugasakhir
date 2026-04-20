@@ -44,6 +44,10 @@ class GenerationRequest(BaseModel):
     script_dialogue: Optional[str] = None
     use_rag: bool = True
 
+class FullGenerationRequest(BaseModel):
+    concept: str
+    use_rag: bool = True
+
 class TaskStatusResponse(BaseModel):
     task_id: str
     status: str
@@ -239,6 +243,105 @@ async def start_upscale(req: UpscaleRequest, background_tasks: BackgroundTasks):
 def read_root():
     return {"message": "ITS TV Storyboard API is running. Hardware Profile: RTX 3050 Async Mode."}
 
+async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bool = True):
+    """
+    Background Task to handle full automation: Concept -> Script -> Array of Storyboards
+    This loops sequentially through each scene, maintaining aggressive VRAM clearing between cycles.
+    Tracks state incrementally via log_stream and result_scenes arrays so frontend can print progressively.
+    """
+    try:
+        from services.llm import generate_scenes_from_concept
+        tasks_db[task_id]["status"] = "generating_script"
+        tasks_db[task_id]["log_stream"].append("LLM: Interpreting concept and expanding into a multi-scene storyboard...")
+        
+        scenes = await generate_scenes_from_concept(concept)
+        if not scenes:
+            tasks_db[task_id]["status"] = "failed"
+            tasks_db[task_id]["log_stream"].append("Failed to extract logical scenes from LLM output. Stopping.")
+            tasks_db[task_id]["result"] = {"error": "Failed to generate scenes."}
+            return
+            
+        tasks_db[task_id]["total_frames"] = len(scenes)
+        tasks_db[task_id]["log_stream"].append(f"Scripts successfully generated! Total Scenes: {len(scenes)}")
+        
+        for idx, scene in enumerate(scenes):
+            tasks_db[task_id]["status"] = "processing_frame"
+            tasks_db[task_id]["current_frame"] = idx + 1
+            tasks_db[task_id]["log_stream"].append(f"--- INIT FRAME {idx + 1}/{len(scenes)}: Scene {scene.get('scene_no')} ---")
+            
+            prompt = f"Scene {scene.get('scene_no')} at {scene.get('location')}: {scene.get('description')}. Shot: {scene.get('shot_type')}"
+            visual_description = scene.get('visual_description')
+            script_dialogue = scene.get('script_dialogue')
+            
+            rag_sources = []
+            image_reference = None
+            if use_rag:
+                tasks_db[task_id]["log_stream"].append(f"Frame {idx + 1}: Searching Context for Background Assets (RAG)...")
+                visual_contexts = await get_visual_context(prompt)
+            else:
+                tasks_db[task_id]["log_stream"].append(f"Frame {idx + 1}: Ablation Mode: Skipping RAG...")
+                visual_contexts = None
+                
+            tasks_db[task_id]["log_stream"].append(f"Frame {idx + 1}: Director AI generating SD Prompt...")
+            if visual_contexts:
+                context_parts = []
+                for ctx in visual_contexts:
+                    context_parts.append(f"{ctx['source']} ({ctx['caption']})")
+                    if not image_reference:
+                        image_reference = os.path.join("ai/images_its", ctx['source'])
+                    rag_sources.append({"source": ctx['source'], "caption": ctx['caption']})
+                context_str = ", ".join(context_parts)
+            else:
+                context_str = ""
+                
+            enhanced_prompt = await enhance_prompt(prompt, visual_description, context_str)
+            
+            tasks_db[task_id]["log_stream"].append(f"Frame {idx + 1}: Synthesizing Visuals (Diffusion SD 1.5)...")
+            async with gpu_semaphore:
+                from services.diffusion import generate_image
+                image_paths = [image_reference] if image_reference and os.path.exists(image_reference) else None
+                image = await generate_image(
+                    prompt=enhanced_prompt,
+                    reference_image_paths=image_paths
+                )
+                
+            output_filename = f"outputs/task_{task_id}_frame_{idx+1}.png"
+            image.save(output_filename)
+            
+            frame_result = {
+                "image_url": f"/{output_filename}",
+                "enhanced_prompt": enhanced_prompt,
+                "original_prompt": prompt,
+                "visual_description": visual_description,
+                "script_dialogue": script_dialogue,
+                "rag_context": visual_contexts,
+                "rag_sources": rag_sources,
+                "mode_ablasi": not use_rag,
+                "scene_no": scene.get('scene_no'),
+                "shot_type": scene.get('shot_type'),
+                "id": f"{task_id}_{idx+1}"
+            }
+            
+            # Since this takes 15 mins, we push incremental results!
+            tasks_db[task_id]["result_scenes"].append(frame_result)
+            tasks_db[task_id]["log_stream"].append(f"Frame {idx + 1} completed and saved!")
+            
+            import gc
+            gc.collect()
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                tasks_db[task_id]["log_stream"].append(f"Frame {idx + 1}: GPU Hardware Memory Flushed.")
+
+        tasks_db[task_id]["status"] = "completed"
+        tasks_db[task_id]["log_stream"].append("Full Storyboard Generation Cycle Completed Successfully!")
+        
+    except Exception as e:
+        print(f"[Task {task_id}] Full Processing failed: {e}")
+        tasks_db[task_id]["status"] = "failed"
+        tasks_db[task_id]["result"] = {"error": str(e)}
+        tasks_db[task_id]["log_stream"].append(f"CRITICAL ERROR: {str(e)}")
+
 @app.post("/api/generate", response_model=TaskStatusResponse)
 async def start_generation(req: GenerationRequest, background_tasks: BackgroundTasks):
     """
@@ -252,19 +355,44 @@ async def start_generation(req: GenerationRequest, background_tasks: BackgroundT
     
     return TaskStatusResponse(task_id=task_id, status="pending")
 
-@app.get("/api/task/{task_id}", response_model=TaskStatusResponse)
+@app.post("/api/generate-full")
+async def generate_full_storyboard(req: FullGenerationRequest, background_tasks: BackgroundTasks):
+    task_id = str(uuid.uuid4())
+    
+    tasks_db[task_id] = {
+        "status": "pending", 
+        "result_scenes": [], 
+        "log_stream": ["Task Initiated. Awaiting Worker..."],
+        "current_frame": 0,
+        "total_frames": 0,
+        "result": None
+    }
+    
+    background_tasks.add_task(async_generate_full_storyboard, task_id, req.concept, req.use_rag)
+    
+    return TaskStatusResponse(task_id=task_id, status="pending")
+
+@app.get("/api/task/{task_id}")
 def get_task_status(task_id: str):
     """
-    Endpoint to check the status of a generation task.
+    Endpoint to check the status of a generation task. 
+    Extended to return Live Log Stream and Array of completed Scenes.
     """
     if task_id not in tasks_db:
         return TaskStatusResponse(task_id=task_id, status="not_found")
     
-    return TaskStatusResponse(
-        task_id=task_id,
-        status=tasks_db[task_id]["status"],
-        result=tasks_db[task_id]["result"]
-    )
+    task_data = tasks_db[task_id]
+    
+    # We dynamically return different structures based on if it's a full-auto or single-shot
+    return {
+        "task_id": task_id,
+        "status": task_data["status"],
+        "result": task_data["result"],
+        "log_stream": task_data.get("log_stream"),
+        "result_scenes": task_data.get("result_scenes"),
+        "current_frame": task_data.get("current_frame"),
+        "total_frames": task_data.get("total_frames")
+    }
 
 @app.post("/api/ingest-csv")
 async def api_ingest_csv(background_tasks: BackgroundTasks):
