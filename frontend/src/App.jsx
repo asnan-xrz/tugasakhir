@@ -288,14 +288,20 @@ function App() {
   };
 
   const getBase64ImageFromUrl = async (imageUrl) => {
-    const res = await fetch(imageUrl);
-    const blob = await res.blob();
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
+    try {
+      const res = await fetch(imageUrl, { mode: 'cors' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (e) {
+      console.warn(`PDF image fetch failed for ${imageUrl}:`, e);
+      return null; // Gracefully skip image instead of crashing PDF export
+    }
   };
 
   const handleExportToPdf = async () => {

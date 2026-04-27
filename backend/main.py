@@ -43,10 +43,18 @@ class GenerationRequest(BaseModel):
     visual_description: Optional[str] = None
     script_dialogue: Optional[str] = None
     use_rag: bool = True
+    base_model_path: Optional[str] = None
+    lora_path: Optional[str] = None
 
 class FullGenerationRequest(BaseModel):
     concept: str
     use_rag: bool = True
+    base_model_path: Optional[str] = None
+    lora_path: Optional[str] = None
+
+class ModelSyncRequest(BaseModel):
+    base_model_id: Optional[str] = "128713" # Placeholder ID for Storyboard Sketch
+    lora_id: Optional[str] = "87153" # Placeholder ID for ITS TV Style
 
 class TaskStatusResponse(BaseModel):
     task_id: str
@@ -56,7 +64,7 @@ class TaskStatusResponse(BaseModel):
 # Semaphore untuk membatasi proses GPU agar tidak concurrent memory OOM pada RTX 3050 (6GB)
 gpu_semaphore = asyncio.Semaphore(1)
 
-async def async_generate_storyboard(task_id: str, prompt: str, visual_description: str = None, use_rag: bool = True, script_dialogue: str = None):
+async def async_generate_storyboard(task_id: str, prompt: str, visual_description: str = None, use_rag: bool = True, script_dialogue: str = None, base_model_path: str = None, lora_path: str = None):
     """
     Background Task to handle text-to-image generation asynchronously inside a GPU queue.
     """
@@ -120,7 +128,13 @@ async def async_generate_storyboard(task_id: str, prompt: str, visual_descriptio
             print(f"[Task {task_id}] Queueing Stable Diffusion Generation...")
             tasks_db[task_id]["status"] = "diffusion"
             output_filename = f"outputs/task_{task_id}.png"
-            image_path = await generate_image(enhanced_prompt, output_filename, image_reference)
+            image_path = await generate_image(
+                prompt=enhanced_prompt, 
+                output_path=output_filename, 
+                image_reference=image_reference,
+                base_model_path=base_model_path,
+                lora_path=lora_path
+            )
             
             print(f"[Task {task_id}] Generation completed successfully!")
             tasks_db[task_id]["status"] = "completed"
@@ -243,7 +257,7 @@ async def start_upscale(req: UpscaleRequest, background_tasks: BackgroundTasks):
 def read_root():
     return {"message": "ITS TV Storyboard API is running. Hardware Profile: RTX 3050 Async Mode."}
 
-async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bool = True):
+async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bool = True, base_model_path: str = None, lora_path: str = None):
     """
     Background Task to handle full automation: Concept -> Script -> Array of Storyboards
     This loops sequentially through each scene, maintaining aggressive VRAM clearing between cycles.
@@ -324,7 +338,9 @@ async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bo
                 final_image_path = await generate_image(
                     prompt=enhanced_prompt,
                     output_path=output_path,
-                    image_reference=image_reference
+                    image_reference=image_reference,
+                    base_model_path=base_model_path,
+                    lora_path=lora_path
                 )
             
             frame_result = {
@@ -379,7 +395,7 @@ async def start_generation(req: GenerationRequest, background_tasks: BackgroundT
     tasks_db[task_id] = {"status": "pending", "result": None}
     
     # Offload heavy AI processing to background task
-    background_tasks.add_task(async_generate_storyboard, task_id, req.prompt, req.visual_description, req.use_rag, req.script_dialogue)
+    background_tasks.add_task(async_generate_storyboard, task_id, req.prompt, req.visual_description, req.use_rag, req.script_dialogue, req.base_model_path, req.lora_path)
     
     return TaskStatusResponse(task_id=task_id, status="pending")
 
@@ -396,8 +412,63 @@ async def generate_full_storyboard(req: FullGenerationRequest, background_tasks:
         "result": None
     }
     
-    background_tasks.add_task(async_generate_full_storyboard, task_id, req.concept, req.use_rag)
+    background_tasks.add_task(async_generate_full_storyboard, task_id, req.concept, req.use_rag, req.base_model_path, req.lora_path)
     
+    return TaskStatusResponse(task_id=task_id, status="pending")
+
+async def async_sync_models(task_id: str, base_id: Optional[str], lora_id: Optional[str]):
+    from services.diffusion import download_model_from_civitai
+    import traceback
+    
+    def make_progress_cb(label):
+        def cb(msg):
+            # Update the last log line with download progress
+            progress_line = f"[{label}] {msg}"
+            if tasks_db[task_id]["log_stream"] and tasks_db[task_id]["log_stream"][-1].startswith(f"[{label}]"):
+                tasks_db[task_id]["log_stream"][-1] = progress_line
+            else:
+                tasks_db[task_id]["log_stream"].append(progress_line)
+        return cb
+    
+    try:
+        tasks_db[task_id]["status"] = "syncing_base_model"
+        if base_id:
+            base_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", f"base_{base_id}.safetensors")
+            if os.path.exists(base_path):
+                tasks_db[task_id]["log_stream"].append(f"Base Model {base_id} already exists. Skipping download.")
+            else:
+                tasks_db[task_id]["log_stream"].append(f"Downloading Base Model {base_id} (~2GB)...")
+                await download_model_from_civitai(base_id, base_path, is_lora=False, progress_callback=make_progress_cb("BASE"))
+            tasks_db[task_id]["result"]["base_model_path"] = base_path
+            
+        tasks_db[task_id]["status"] = "syncing_lora"
+        if lora_id:
+            lora_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", f"lora_{lora_id}.safetensors")
+            if os.path.exists(lora_path):
+                tasks_db[task_id]["log_stream"].append(f"LoRA {lora_id} already exists. Skipping download.")
+            else:
+                tasks_db[task_id]["log_stream"].append(f"Downloading LoRA {lora_id}...")
+                await download_model_from_civitai(lora_id, lora_path, is_lora=True, progress_callback=make_progress_cb("LORA"))
+            tasks_db[task_id]["result"]["lora_path"] = lora_path
+            
+        tasks_db[task_id]["status"] = "completed"
+        tasks_db[task_id]["log_stream"].append("✅ All models synced successfully!")
+    except Exception as e:
+        full_error = traceback.format_exc()
+        print(f"[Sync Error] {full_error}")
+        tasks_db[task_id]["status"] = "failed"
+        tasks_db[task_id]["result"]["error"] = str(e) or full_error
+        tasks_db[task_id]["log_stream"].append(f"CRITICAL ERROR: {str(e) or full_error}")
+
+@app.post("/api/models/sync", response_model=TaskStatusResponse)
+async def sync_models(req: ModelSyncRequest, background_tasks: BackgroundTasks):
+    task_id = str(uuid.uuid4())
+    tasks_db[task_id] = {
+        "status": "pending",
+        "result": {},
+        "log_stream": ["Model sync task initiated."]
+    }
+    background_tasks.add_task(async_sync_models, task_id, req.base_model_id, req.lora_id)
     return TaskStatusResponse(task_id=task_id, status="pending")
 
 @app.get("/api/task/{task_id}")

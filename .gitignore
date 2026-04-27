@@ -27,3 +27,5 @@ backend/services/*.pb
 # Model weights
 backend/models/
 temp_lora_output/
+models/*.safetensors
+models/metadata.json
