@@ -54,8 +54,12 @@ def _query_rag_sync(scene_text: str) -> list:
                 if 'metadatas' in results and results['metadatas'] and i < len(results['metadatas'][0]):
                     metadata = results['metadatas'][0][i]
                 
+                distance = 0.0
+                if 'distances' in results and results['distances'] and i < len(results['distances'][0]):
+                    distance = results['distances'][0][i]
+                
                 source = metadata.get('image_source', 'Unknown')
-                context_list.append({"text": doc, "source": source})
+                context_list.append({"text": doc, "source": source, "distance": distance})
             return context_list
     except Exception as e:
         print(f"RAG Error: {e}")

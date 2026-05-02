@@ -885,9 +885,23 @@ function App() {
                                     <span className="text-xs text-slate-600 uppercase font-bold">No Image Rendered</span>
                                 )}
                               </div>
-                              {img.rag_context && !img.mode_ablasi && (
-                                <div className="mt-2 text-[8px] text-left text-slate-700 leading-tight">
-                                  <strong>RAG refs:</strong> {Array.isArray(img.rag_context) ? img.rag_context.map(ctx => ctx.source).join(', ') : 'Context Used'}
+                              {img.rag_context && !img.mode_ablasi && img.rag_context.length > 0 && (
+                                <div className="mt-3 flex flex-col gap-1.5 print:hidden bg-slate-900/40 p-2 rounded border border-slate-700/50 shadow-inner">
+                                  <span className="text-[9px] text-cyan-500/80 uppercase font-bold tracking-widest border-b border-slate-700/50 pb-1 mb-1">
+                                    Vector Similarity (RAG)
+                                  </span>
+                                  {img.rag_context.map((ctx, cIdx) => {
+                                      // ChromaDB L2 distance -> simple percentage score approx
+                                      const simScore = Math.max(0, 100 - (ctx.distance * 50)).toFixed(1);
+                                      return (
+                                          <div key={cIdx} className="flex justify-between items-center text-[10px] bg-black/40 px-2 py-1 rounded border border-slate-800/60">
+                                              <span className="text-slate-400 truncate w-2/3" title={ctx.source}>{ctx.source}</span>
+                                              <span className={`font-mono font-semibold ${simScore > 75 ? 'text-emerald-400' : simScore > 50 ? 'text-amber-400' : 'text-rose-400'}`}>
+                                                {simScore}%
+                                              </span>
+                                          </div>
+                                      );
+                                  })}
                                 </div>
                               )}
                               {img.mode_ablasi && (
