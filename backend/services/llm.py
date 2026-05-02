@@ -82,22 +82,33 @@ async def analyze_script_to_scenes(script_text: str) -> List[Dict[str, Any]]:
     """
     Sends the extracted script text to local Ollama and requests a JSON list of scenes.
     """
-    prompt = f"""You are a strict JSON data extractor.
-Read the script text below and extract a list of scenes.
-Respond ONLY with a raw JSON object and nothing else. No conversational text, no markdown code blocks, no preamble, and no explanation.
-Your output MUST perfectly match this exact JSON structure:
+    prompt = f"""Kamu adalah asisten AI pembuat storyboard profesional.
+PERATURAN MUTLAK:
+1. Seluruh teks (KECUALI prompt_gambar) WAJIB ditulis FULL dalam Bahasa Indonesia. DILARANG KERAS menggunakan kalimat bahasa Inggris pada deskripsi_visual.
+2. Setiap kali kamu menggunakan istilah teknis sinematografi (seperti Close-up, Fade in, Low Angle), WAJIB apit kata tersebut dengan tanda bintang tunggal (contoh: *Close-up*, *Tracking shot*), tapi sisa kalimatnya harus tetap Bahasa Indonesia (contoh: "*Close-up* pada wajah karakter dengan pencahayaan alami").
+3. Kamu WAJIB menuliskan Dialog atau Voice Over (VO) yang naratif dan SANGAT KREATIF untuk kolom script. JANGAN mengulang-ulang dialog yang sama ("Kami kehilangan arah") di setiap adegan! Buatlah alur cerita yang berkembang. Jangan biarkan kosong atau hanya diisi "-". Jangan gunakan awalan "Voice Over: " atau "VO: ", tulis kalimatnya secara langsung!
+4. prompt_gambar WAJIB tetap FULL dalam Bahasa Inggris.
+
+Berdasarkan input cerita dari pengguna, rumuskan storyboard lengkap ke format JSON array of objects. Setiap objek mewakili satu adegan dan wajib memiliki key berikut:
+
 {{
   "scenes": [
     {{
-      "scene_no": 1,
-      "location": "Name of the location",
-      "description": "Detailed description of what happens in the scene",
-      "shot_type": "The camera shot type",
-      "visual_description": "Cinematography details: Camera Angle (Low/High/Eye level), Framing (CU/MS/LS), and Lighting (Warm/Cinematic/Natural) assigned based on context",
-      "script_dialogue": "Dialog or Voice Over (VO) spoken by talent in this scene, or empty string if no voice is present"
+      "scene": 1,
+      "shot": "A",
+      "deskripsi_adegan": "Deskripsi cerita, alur, dan mood dalam Bahasa Indonesia.",
+      "script": "Teks dialog atau VO (kalimat langsung, bervariasi tiap adegan).",
+      "prompt_gambar": "Detailed English prompt for text-to-image generation.",
+      "deskripsi_visual": "Jelaskan framing dan pencahayaan dalam Bahasa Indonesia. Istilah teknis WAJIB diapit *bintang*.",
+      "durasi": "4s",
+      "transisi": "Jenis transisi (misal: *Cut to cut*, *Fade*).",
+      "audio": "Audio/backsound dan mood-nya.",
+      "keterangan": "Lokasi pengambilan gambar."
     }}
   ]
 }}
+
+Pastikan output HANYA JSON valid.
 
 Script:
 {script_text}
@@ -169,27 +180,39 @@ Script:
                 norm = {}
                 for k, v in raw_scene.items():
                     lk = str(k).lower().replace(' ', '_').replace('-', '_')
-                    if 'no' in lk or 'num' in lk or 'id' == lk:
-                        norm['scene_no'] = v
-                    elif 'loc' in lk:
-                        norm['location'] = v
-                    elif 'desc' in lk or 'act' in lk or 'scene' == lk:
-                        norm['description'] = v
-                    elif 'shot' in lk or 'type' in lk:
-                        norm['shot_type'] = v
-                    elif 'visual' in lk or 'cinematography' in lk:
-                        norm['visual_description'] = v
-                    elif 'dialog' in lk or 'script' in lk or 'vo' == lk or 'voice' in lk:
-                        norm['script_dialogue'] = v
+                    if 'scene' in lk or 'no' in lk or 'id' == lk:
+                        norm['scene'] = v
+                    elif 'shot' in lk:
+                        norm['shot'] = v
+                    elif 'adegan' in lk or 'desc' in lk or 'cerita' in lk:
+                        norm['deskripsi_adegan'] = v
+                    elif 'script' in lk or 'dialog' in lk or 'voice' in lk:
+                        norm['script'] = v
+                    elif 'prompt' in lk or 'gambar' in lk:
+                        norm['prompt_gambar'] = v
+                    elif 'visual' in lk or 'framing' in lk or 'angle' in lk:
+                        norm['deskripsi_visual'] = v
+                    elif 'durasi' in lk or 'waktu' in lk or 'time' in lk:
+                        norm['durasi'] = v
+                    elif 'transisi' in lk:
+                        norm['transisi'] = v
+                    elif 'audio' in lk or 'bgm' in lk or 'sfx' in lk:
+                        norm['audio'] = v
+                    elif 'keterangan' in lk or 'lokasi' in lk or 'loc' in lk:
+                        norm['keterangan'] = v
                     else:
                         norm[lk] = v
                 return {
-                    "scene_no": norm.get('scene_no', 0),
-                    "location": norm.get('location', 'Unknown'),
-                    "description": norm.get('description', ''),
-                    "shot_type": norm.get('shot_type', ''),
-                    "visual_description": norm.get('visual_description', ''),
-                    "script_dialogue": norm.get('script_dialogue', '')
+                    "scene": norm.get('scene', 1),
+                    "shot": norm.get('shot', 'A'),
+                    "deskripsi_adegan": norm.get('deskripsi_adegan', ''),
+                    "script": norm.get('script', '-'),
+                    "prompt_gambar": norm.get('prompt_gambar', ''),
+                    "deskripsi_visual": norm.get('deskripsi_visual', ''),
+                    "durasi": norm.get('durasi', '3s'),
+                    "transisi": norm.get('transisi', 'cut to cut'),
+                    "audio": norm.get('audio', ''),
+                    "keterangan": norm.get('keterangan', '')
                 }
 
             extracted_list = []
@@ -232,23 +255,33 @@ async def generate_scenes_from_concept(concept: str) -> List[Dict[str, Any]]:
     Takes a short creative concept and utilizes the local Ollama LLM as a scriptwriter and storyboarder 
     to automatically generate a full 5-8 scene script breakdown.
     """
-    prompt = f"""You are a professional Creative Director, Scriptwriter, and Storyboard Artist.
-The user has provided a short concept for a video.
-Your task is to expand this concept into a full, engaging storyboard consisting of 5 to 8 well-paced scenes.
-Respond ONLY with a raw JSON object and nothing else. No conversational text, no markdown code blocks, no preamble.
-Your output MUST perfectly match this exact JSON structure:
+    prompt = f"""Kamu adalah asisten AI pembuat storyboard profesional.
+PERATURAN MUTLAK:
+1. Seluruh teks (KECUALI prompt_gambar) WAJIB ditulis FULL dalam Bahasa Indonesia. DILARANG KERAS menggunakan kalimat bahasa Inggris pada deskripsi_visual.
+2. Setiap kali kamu menggunakan istilah teknis sinematografi (seperti Close-up, Fade in, Low Angle), WAJIB apit kata tersebut dengan tanda bintang tunggal (contoh: *Close-up*, *Tracking shot*), tapi sisa kalimatnya harus tetap Bahasa Indonesia (contoh: "*Close-up* pada wajah karakter dengan pencahayaan sinematik").
+3. Kamu WAJIB menuliskan Dialog atau Voice Over (VO) yang sangat emosional, kreatif, dan berkembang (TIDAK REPETITIF) antar adegan di kolom script. JANGAN mengulang-ulang kalimat yang sama di tiap scene! Jangan gunakan awalan "Voice Over:" atau "VO:" di dalam teksnya, tulis dialognya secara langsung.
+4. prompt_gambar WAJIB tetap FULL dalam Bahasa Inggris.
+
+Berdasarkan input konsep pengguna, jabarkan menjadi storyboard lengkap (5-8 adegan) ke format JSON array of objects. Setiap objek mewakili satu adegan dan wajib memiliki key berikut:
+
 {{
   "scenes": [
     {{
-      "scene_no": 1,
-      "location": "Name of the detailed location",
-      "description": "Detailed description of what happens visually and narratively",
-      "shot_type": "The camera shot type (e.g. Medium Shot, Tracking)",
-      "visual_description": "Cinematography details: Camera Angle, Framing, and Lighting",
-      "script_dialogue": "Dialog or Voice Over (VO) spoken by talent in this scene, or empty string if no voice is present"
+      "scene": 1,
+      "shot": "A",
+      "deskripsi_adegan": "Deskripsi cerita, alur, dan mood dalam Bahasa Indonesia.",
+      "script": "Teks dialog atau VO (kalimat langsung, dinamis, dan tidak diulang-ulang).",
+      "prompt_gambar": "Detailed English prompt for text-to-image generation.",
+      "deskripsi_visual": "Jelaskan visual adegan secara menyeluruh dalam Bahasa Indonesia. Apit istilah teknis Inggris dengan *bintang*.",
+      "durasi": "4s",
+      "transisi": "Jenis transisi (misal: *Cut to cut*, *Fade in*).",
+      "audio": "Audio/backsound dan mood-nya.",
+      "keterangan": "Lokasi spesifik pengambilan gambar."
     }}
   ]
 }}
+
+Pastikan output HANYA JSON valid.
 
 Concept Idea:
 {concept}
@@ -309,27 +342,39 @@ Concept Idea:
                 norm = {}
                 for k, v in raw_scene.items():
                     lk = str(k).lower().replace(' ', '_').replace('-', '_')
-                    if 'no' in lk or 'num' in lk or 'id' == lk:
-                        norm['scene_no'] = v
-                    elif 'loc' in lk:
-                        norm['location'] = v
-                    elif 'desc' in lk or 'act' in lk or 'scene' == lk:
-                        norm['description'] = v
-                    elif 'shot' in lk or 'type' in lk:
-                        norm['shot_type'] = v
-                    elif 'visual' in lk or 'cinematography' in lk:
-                        norm['visual_description'] = v
-                    elif 'dialog' in lk or 'script' in lk or 'vo' == lk or 'voice' in lk:
-                        norm['script_dialogue'] = v
+                    if 'scene' in lk or 'no' in lk or 'id' == lk:
+                        norm['scene'] = v
+                    elif 'shot' in lk:
+                        norm['shot'] = v
+                    elif 'adegan' in lk or 'desc' in lk or 'cerita' in lk:
+                        norm['deskripsi_adegan'] = v
+                    elif 'script' in lk or 'dialog' in lk or 'voice' in lk:
+                        norm['script'] = v
+                    elif 'prompt' in lk or 'gambar' in lk:
+                        norm['prompt_gambar'] = v
+                    elif 'visual' in lk or 'framing' in lk or 'angle' in lk:
+                        norm['deskripsi_visual'] = v
+                    elif 'durasi' in lk or 'waktu' in lk or 'time' in lk:
+                        norm['durasi'] = v
+                    elif 'transisi' in lk:
+                        norm['transisi'] = v
+                    elif 'audio' in lk or 'bgm' in lk or 'sfx' in lk:
+                        norm['audio'] = v
+                    elif 'keterangan' in lk or 'lokasi' in lk or 'loc' in lk:
+                        norm['keterangan'] = v
                     else:
                         norm[lk] = v
                 return {
-                    "scene_no": norm.get('scene_no', 0),
-                    "location": norm.get('location', 'Unknown'),
-                    "description": norm.get('description', ''),
-                    "shot_type": norm.get('shot_type', ''),
-                    "visual_description": norm.get('visual_description', ''),
-                    "script_dialogue": norm.get('script_dialogue', '')
+                    "scene": norm.get('scene', 1),
+                    "shot": norm.get('shot', 'A'),
+                    "deskripsi_adegan": norm.get('deskripsi_adegan', ''),
+                    "script": norm.get('script', '-'),
+                    "prompt_gambar": norm.get('prompt_gambar', ''),
+                    "deskripsi_visual": norm.get('deskripsi_visual', ''),
+                    "durasi": norm.get('durasi', '3s'),
+                    "transisi": norm.get('transisi', 'cut to cut'),
+                    "audio": norm.get('audio', ''),
+                    "keterangan": norm.get('keterangan', '')
                 }
 
             extracted_list = []

@@ -202,6 +202,11 @@ function App() {
                     script_dialogue: s.script_dialogue,
                     visual_description: s.visual_description,
                     scene_no: s.scene_no,
+                    shot_letter: s.shot_letter,
+                    durasi: s.durasi,
+                    transisi: s.transisi,
+                    audio: s.audio,
+                    keterangan: s.keterangan,
                     url: s.image_url ? (s.image_url.startsWith('http') ? s.image_url : `${API_URL}${s.image_url}`) : null,
                     isUpscaling: false,
                     isGeneratingStatus: s.is_generating !== undefined ? s.is_generating : false
@@ -217,8 +222,10 @@ function App() {
                 const mappedUrls = statusRes.data.result_scenes.map(s => ({
                     id: s.id, prompt: s.enhanced_prompt, original_prompt: s.original_prompt,
                     script_dialogue: s.script_dialogue, visual_description: s.visual_description,
-                    scene_no: s.scene_no, url: s.image_url ? (s.image_url.startsWith('http') ? s.image_url : `${API_URL}${s.image_url}`) : null,
-                    isUpscaling: false, isGeneratingStatus: false
+                    scene_no: s.scene_no, 
+                    shot_letter: s.shot_letter, durasi: s.durasi, transisi: s.transisi, audio: s.audio, keterangan: s.keterangan,
+                    url: s.image_url ? (s.image_url.startsWith('http') ? s.image_url : `${API_URL}${s.image_url}`) : null,
+                    rag_context: s.rag_context, mode_ablasi: s.mode_ablasi, isUpscaling: false, isGeneratingStatus: false
                 }));
                 setImages(mappedUrls);
             }
@@ -341,60 +348,80 @@ function App() {
                                                   .replace(/cinematic lighting/gi, '')
                                                   .replace(/,/g, ' ')
                                                   .replace(/\s+/g, ' ').trim() || '';
+                                                  
               const deskripsiAdegan = imgState.original_prompt ? imgState.original_prompt : cleanedPrompt;
-              const dialog = imgState.script_dialogue ? `Dialog/VO:\n"${imgState.script_dialogue}"` : "-";
+              const dialog = imgState.script_dialogue ? `VO: "${imgState.script_dialogue}"` : "-";
               const sceneNum = imgState.scene_no || (i + 1);
+              const shotLetter = imgState.shot_letter || String.fromCharCode(65 + (i % 26));
+              const duration = imgState.durasi || '3s';
+              const transition = imgState.transisi || 'cut to cut';
+              const audio = imgState.audio || (imgState.script_dialogue ? 'Voice dialogue, ambient background' : 'BGM Cinematic, ambient');
+              const keterangan = imgState.keterangan || (imgState.original_prompt?.match(/di\s([^,]+)/i) ? imgState.original_prompt.match(/di\s([^,]+)/i)[1] : "Exterior / Interior");
 
               tableBody.push([
                   sceneNum, 
+                  shotLetter,
+                  deskripsiAdegan,
+                  dialog,
                   "", // Placeholder untuk image render di didDrawCell
-                  `${deskripsiAdegan}\n\n${dialog}`,
-                  imgState.visual_description || 'N/A',
-                  base64Img // Index 4 rahasia untuk extract
+                  imgState.visual_description || '-',
+                  duration,
+                  transition,
+                  audio,
+                  keterangan,
+                  base64Img // Index 10 rahasia untuk extract
               ]);
           }
 
           autoTable(doc, {
               startY: 90,
-              head: [['No', 'Visual', 'Deskripsi Adegan + Script', 'Deskripsi Visual (Angle/Lighting)']],
+              head: [['SCENE', 'SHOT', 'DESKRIPSI ADEGAN', 'SCRIPT', 'VISUALISASI', 'DESKRIPSI VISUAL', 'DURASI', 'TRANSISI', 'AUDIO', 'KETERANGAN']],
               body: tableBody,
               styles: {
                   valign: 'middle',
-                  cellPadding: 8,
-                  fontSize: 9,
+                  cellPadding: 4,
+                  fontSize: 7,
                   lineColor: [40, 40, 40],
                   lineWidth: 0.5,
+                  overflow: 'linebreak'
               },
               headStyles: {
                   fillColor: [10, 26, 47], // ITS TV Dark Nav
                   textColor: 255,
                   fontStyle: 'bold',
-                  halign: 'center'
+                  halign: 'center',
+                  fontSize: 7
               },
               columnStyles: {
-                  0: { cellWidth: 40, halign: 'center' }, // No
-                  1: { cellWidth: 180 }, // Visual space
-                  2: { cellWidth: 'auto' }, // Deskripsi
-                  3: { cellWidth: 150 }, // Angle/Lighting
+                  0: { cellWidth: 30, halign: 'center', fontStyle: 'bold' },
+                  1: { cellWidth: 30, halign: 'center', fontStyle: 'bold' },
+                  2: { cellWidth: 100 },
+                  3: { cellWidth: 100, fontStyle: 'italic' },
+                  4: { cellWidth: 120 }, // Visual space
+                  5: { cellWidth: 100 },
+                  6: { cellWidth: 40, halign: 'center' },
+                  7: { cellWidth: 50, halign: 'center' },
+                  8: { cellWidth: 90 },
+                  9: { cellWidth: 'auto' }
               },
               didDrawCell: function (data) {
-                  // Jika ini sel visual dan dibagian body
-                  if (data.section === 'body' && data.column.index === 1) {
-                      const base64Img = data.row.raw[4]; // Extract dari rahasia array 
+                  // Jika ini sel visual dan dibagian body (Kolom ke-4 adalah indeks 4)
+                  if (data.section === 'body' && data.column.index === 4) {
+                      const base64Img = data.row.raw[10]; // Extract dari rahasia array 
                       if (base64Img) {
-                          const dim = 160; 
-                          // Calculate tengah sel visual
+                          const dim = 100; // Smaller dim to fit 10 columns
                           const x = data.cell.x + 10;
-                          const y = data.cell.y + 10;
+                          // Center vertically
+                          const y = data.cell.y + (data.cell.height - dim) / 2;
                           try {
-                              doc.addImage(base64Img, 'PNG', x, y, dim, dim); // Assume rasio 1:1 dari SD 512x512
+                              doc.addImage(base64Img, 'PNG', x, y > data.cell.y ? y : data.cell.y + 5, dim, dim); 
                           } catch (e) { console.error("Error drawing image in PDF", e); }
                       }
                   }
               },
-              margin: { top: 70, left: 40, right: 40, bottom: 40 },
+              margin: { top: 70, left: 20, right: 20, bottom: 40 },
               rowPageBreak: 'avoid',
-              bodyStyles: { minCellHeight: 180 }, // Spacer tinggi minimum sel
+              bodyStyles: { minCellHeight: 110 }, // Spacer tinggi minimum sel untuk gambar
           });
 
           doc.save(`ITS_TV_Storyboard_${new Date().getTime()}.pdf`);
@@ -404,6 +431,16 @@ function App() {
       } finally {
           setIsExportingPdf(false);
       }
+  };
+  const renderWithItalics = (text) => {
+      if (!text) return text;
+      // Split by *asterisks*
+      const parts = text.split(/(\*[^*]+\*)/g);
+      return parts.map((part, i) => 
+        part.startsWith('*') && part.endsWith('*') 
+          ? <i key={i} className="italic text-cyan-300 font-serif tracking-wide">{part.slice(1, -1)}</i> 
+          : part
+      );
   };
 
   return (
@@ -715,17 +752,18 @@ function App() {
             <div className="absolute inset-0 opacity-[0.03] pointer-events-none print:hidden" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, #00FFFF 1px, transparent 0)', backgroundSize: '32px 32px' }}></div>
 
             {/* Canvas Header */}
-            <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-10 bg-gradient-to-b from-[#020409] to-transparent pointer-events-none print:hidden">
+            <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-50 bg-gradient-to-b from-[#020409] to-transparent print:hidden">
               <h3 className="text-xs font-semibold uppercase tracking-widest text-cyan-600/50 flex items-center gap-2 drop-shadow-md">
                 <ImageIcon size={14} /> Output Viewer
               </h3>
               {images.length > 0 && (
                 <button
                   onClick={handleExportToPdf}
-                  disabled={isExportingPdf}
-                  className={`pointer-events-auto flex items-center gap-2 border border-emerald-500/50 text-emerald-400 px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-colors ${isExportingPdf ? 'bg-emerald-900/80 cursor-not-allowed opacity-70' : 'bg-emerald-900/40 hover:bg-emerald-800/60'}`}
+                  disabled={isExportingPdf || isGenerating}
+                  className={`flex items-center gap-2 border px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-colors shadow-lg
+                    ${isExportingPdf || isGenerating ? 'border-emerald-900/50 text-emerald-700 bg-emerald-900/20 cursor-not-allowed opacity-70' : 'border-emerald-500/50 text-emerald-400 bg-emerald-900/40 hover:bg-emerald-500 hover:text-white'}`}
                 >
-                  {isExportingPdf ? <Loader size={12} className="animate-spin" /> : null}
+                  {isExportingPdf ? <Loader size={12} className="animate-spin" /> : <FileText size={14} />}
                   {isExportingPdf ? 'Menyusun PDF...' : 'Export Professional PDF'}
                 </button>
               )}
@@ -808,24 +846,21 @@ function App() {
                                                         .replace(/,/g, ' ')
                                                         .replace(/\s+/g, ' ').trim();
                                                         
-                        // Convert integer index to alphabetical shot identifier (A, B, C...)
-                        const shotLetter = String.fromCharCode(65 + (index % 26));
-
-                        // Attempt to extract duration/transition/script details from prompt (Dummy placeholders for perfection)
-                        const durationMatch = img.original_prompt?.match(/(\d+)s/i);
-                        const duration = durationMatch ? durationMatch[0] : '3s';
-                        const transitionMatch = img.original_prompt?.match(/cut to cut|fade|crossfade/i);
-                        const transition = transitionMatch ? transitionMatch[0].toLowerCase() : 'cut to cut';
+                        const shotLetter = img.shot_letter || String.fromCharCode(65 + (index % 26));
+                        const duration = img.durasi || '3s';
+                        const transition = img.transisi || 'cut to cut';
+                        const audio = img.audio || (img.script_dialogue ? 'Voice dialogue, ambient background' : 'BGM Cinematic, ambient');
+                        const keterangan = img.keterangan || (img.original_prompt?.match(/di\s([^,]+)/i) ? img.original_prompt.match(/di\s([^,]+)/i)[1] : "Exterior / Interior");
 
                         return (
                           <tr key={img.id} className="transition-colors hover:bg-slate-800/40">
                             <td className="px-2 py-4 align-middle border border-slate-700 font-bold text-sm text-cyan-100">{img.scene_no || index + 1}</td>
                             <td className="px-2 py-4 align-middle border border-slate-700 font-bold text-sm text-cyan-200">{shotLetter}</td>
                             <td className="px-3 py-4 align-top border border-slate-700 text-left font-medium text-slate-300">
-                              {img.original_prompt ? img.original_prompt : cleanedPrompt}
+                              {renderWithItalics(img.original_prompt ? img.original_prompt : cleanedPrompt)}
                             </td>
-                            <td className="px-2 py-4 align-top border border-slate-700 italic text-cyan-400 font-medium">
-                              {img.script_dialogue ? `VO: "${img.script_dialogue}"` : '-'}
+                            <td className="px-2 py-4 align-top border border-slate-700 font-medium">
+                              {img.script_dialogue ? <span className="italic text-cyan-400">VO: "{renderWithItalics(img.script_dialogue)}"</span> : '-'}
                             </td>
                             <td className="px-3 py-4 align-top border border-slate-700">
                               <div className="relative rounded-sm overflow-hidden border border-slate-400 bg-black min-h-[120px] shadow-sm flex items-center justify-center">
@@ -862,19 +897,19 @@ function App() {
                               )}
                             </td>
                             <td className="px-2 py-4 align-middle border border-slate-700 font-medium text-slate-300">
-                              {img.visual_description || 'N/A'}
+                              {renderWithItalics(img.visual_description || 'N/A')}
                             </td>
                             <td className="px-2 py-4 align-middle border border-slate-700 text-cyan-300 font-mono">
-                              {duration}
+                              {renderWithItalics(duration)}
                             </td>
                             <td className="px-2 py-4 align-middle border border-slate-700 uppercase text-slate-400">
-                              {transition}
+                              {renderWithItalics(transition)}
                             </td>
                             <td className="px-2 py-4 align-top border border-slate-700 text-left text-slate-500">
-                              -
+                              {renderWithItalics(audio)}
                             </td>
                             <td className="px-2 py-4 align-middle border border-slate-700 font-medium text-slate-300">
-                              Lokasi
+                              {renderWithItalics(keterangan)}
                             </td>
                           </tr>
                         );

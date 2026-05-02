@@ -282,11 +282,16 @@ async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bo
         for idx, scene in enumerate(scenes):
             tasks_db[task_id]["result_scenes"].append({
                 "image_url": None,
-                "enhanced_prompt": "",
-                "original_prompt": f"Scene {scene.get('scene_no', idx+1)} at {scene.get('location', '')}: {scene.get('description', '')}. Shot: {scene.get('shot_type', '')}",
-                "visual_description": scene.get('visual_description', ""),
-                "script_dialogue": scene.get('script_dialogue', ""),
-                "scene_no": scene.get('scene_no', idx + 1),
+                "enhanced_prompt": scene.get('prompt_gambar', ""),
+                "original_prompt": f"Adegan {scene.get('scene', idx+1)} di {scene.get('keterangan', '')}: {scene.get('deskripsi_adegan', '')}. Shot: {scene.get('shot', '')}",
+                "visual_description": scene.get('deskripsi_visual', ""),
+                "script_dialogue": scene.get('script', ""),
+                "scene_no": scene.get('scene', idx + 1),
+                "durasi": scene.get('durasi', "3s"),
+                "transisi": scene.get('transisi', "cut to cut"),
+                "audio": scene.get('audio', ""),
+                "shot_letter": scene.get('shot', ""),
+                "keterangan": scene.get('keterangan', ""),
                 "id": f"{task_id}_{idx+1}",
                 "is_generating": True
             })
@@ -294,11 +299,11 @@ async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bo
         for idx, scene in enumerate(scenes):
             tasks_db[task_id]["status"] = "processing_frame"
             tasks_db[task_id]["current_frame"] = idx + 1
-            tasks_db[task_id]["log_stream"].append(f"--- INIT FRAME {idx + 1}/{len(scenes)}: Scene {scene.get('scene_no')} ---")
+            tasks_db[task_id]["log_stream"].append(f"--- INIT FRAME {idx + 1}/{len(scenes)}: Adegan {scene.get('scene', idx+1)} ---")
             
-            prompt = f"Scene {scene.get('scene_no')} at {scene.get('location')}: {scene.get('description')}. Shot: {scene.get('shot_type')}"
-            visual_description = scene.get('visual_description')
-            script_dialogue = scene.get('script_dialogue')
+            prompt = f"Adegan {scene.get('scene', idx+1)} di {scene.get('keterangan', '')}: {scene.get('deskripsi_adegan', '')}. Shot: {scene.get('shot', '')}"
+            visual_description = scene.get('deskripsi_visual', "")
+            script_dialogue = scene.get('script', "")
             
             rag_sources = []
             image_reference = None
@@ -344,17 +349,21 @@ async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bo
                 )
             
             frame_result = {
+                "id": f"{task_id}_{idx+1}",
                 "image_url": f"/outputs/{output_filename}",
-                "enhanced_prompt": enhanced_prompt,
                 "original_prompt": prompt,
-                "visual_description": visual_description,
+                "enhanced_prompt": enhanced_prompt,
                 "script_dialogue": script_dialogue,
+                "visual_description": visual_description,
+                "scene_no": scene.get('scene', idx + 1),
+                "durasi": scene.get('durasi', "3s"),
+                "transisi": scene.get('transisi', "cut to cut"),
+                "audio": scene.get('audio', ""),
+                "shot_letter": scene.get('shot', ""),
+                "keterangan": scene.get('keterangan', ""),
                 "rag_context": visual_contexts,
                 "rag_sources": rag_sources,
                 "mode_ablasi": not use_rag,
-                "scene_no": scene.get('scene_no'),
-                "shot_type": scene.get('shot_type'),
-                "id": f"{task_id}_{idx+1}",
                 "is_generating": False
             }
             
