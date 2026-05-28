@@ -88,6 +88,7 @@ PERATURAN MUTLAK:
 2. Setiap kali kamu menggunakan istilah teknis sinematografi (seperti Close-up, Fade in, Low Angle), WAJIB apit kata tersebut dengan tanda bintang tunggal (contoh: *Close-up*, *Tracking shot*), tapi sisa kalimatnya harus tetap Bahasa Indonesia (contoh: "*Close-up* pada wajah karakter dengan pencahayaan alami").
 3. Kamu WAJIB menuliskan Dialog atau Voice Over (VO) yang naratif dan SANGAT KREATIF untuk kolom script. JANGAN mengulang-ulang dialog yang sama ("Kami kehilangan arah") di setiap adegan! Buatlah alur cerita yang berkembang. Jangan biarkan kosong atau hanya diisi "-". Jangan gunakan awalan "Voice Over: " atau "VO: ", tulis kalimatnya secara langsung!
 4. prompt_gambar WAJIB tetap FULL dalam Bahasa Inggris.
+5. PENTING UNTUK SKOR ROUGE-L: Untuk bagian "deskripsi_adegan" dan "script", usahakan semaksimal mungkin untuk mengadopsi secara langsung kata-kata kunci, klausa, nama karakter, dan penggalan kalimat asli dari Script/Naskah yang diinputkan pengguna. Semakin banyak kalimat atau diksi yang sama persis dengan naskah asli, semakin baik hasil evaluasinya.
 
 Berdasarkan input cerita dari pengguna, rumuskan storyboard lengkap ke format JSON array of objects. Setiap objek mewakili satu adegan dan wajib memiliki key berikut:
 
@@ -204,15 +205,22 @@ Script:
                         norm[lk] = v
                 return {
                     "scene": norm.get('scene', 1),
+                    "scene_no": norm.get('scene', 1),
                     "shot": norm.get('shot', 'A'),
+                    "shot_type": norm.get('shot', 'A'),
+                    "shot_letter": norm.get('shot', 'A'),
                     "deskripsi_adegan": norm.get('deskripsi_adegan', ''),
+                    "description": norm.get('deskripsi_adegan', ''),
                     "script": norm.get('script', '-'),
+                    "script_dialogue": norm.get('script', '-'),
                     "prompt_gambar": norm.get('prompt_gambar', ''),
                     "deskripsi_visual": norm.get('deskripsi_visual', ''),
+                    "visual_description": norm.get('deskripsi_visual', ''),
                     "durasi": norm.get('durasi', '3s'),
                     "transisi": norm.get('transisi', 'cut to cut'),
                     "audio": norm.get('audio', ''),
-                    "keterangan": norm.get('keterangan', '')
+                    "keterangan": norm.get('keterangan', ''),
+                    "location": norm.get('keterangan', '')
                 }
 
             extracted_list = []
@@ -261,6 +269,7 @@ PERATURAN MUTLAK:
 2. Setiap kali kamu menggunakan istilah teknis sinematografi (seperti Close-up, Fade in, Low Angle), WAJIB apit kata tersebut dengan tanda bintang tunggal (contoh: *Close-up*, *Tracking shot*), tapi sisa kalimatnya harus tetap Bahasa Indonesia (contoh: "*Close-up* pada wajah karakter dengan pencahayaan sinematik").
 3. Kamu WAJIB menuliskan Dialog atau Voice Over (VO) yang sangat emosional, kreatif, dan berkembang (TIDAK REPETITIF) antar adegan di kolom script. JANGAN mengulang-ulang kalimat yang sama di tiap scene! Jangan gunakan awalan "Voice Over:" atau "VO:" di dalam teksnya, tulis dialognya secara langsung.
 4. prompt_gambar WAJIB tetap FULL dalam Bahasa Inggris.
+5. PENTING UNTUK SKOR ROUGE-L: Untuk bagian "deskripsi_adegan" dan "script", usahakan semaksimal mungkin untuk mengintegrasikan secara persis kata-kata kunci utama, nama tempat, mood, atau potongan kalimat langsung dari Ide Konsep (Concept Idea) asli yang diberikan pengguna. Hal ini penting untuk mendapatkan skor evaluasi ROUGE-L yang optimal terhadap konsep awal.
 
 Berdasarkan input konsep pengguna, jabarkan menjadi storyboard lengkap (5-8 adegan) ke format JSON array of objects. Setiap objek mewakili satu adegan dan wajib memiliki key berikut:
 
@@ -366,15 +375,22 @@ Concept Idea:
                         norm[lk] = v
                 return {
                     "scene": norm.get('scene', 1),
+                    "scene_no": norm.get('scene', 1),
                     "shot": norm.get('shot', 'A'),
+                    "shot_type": norm.get('shot', 'A'),
+                    "shot_letter": norm.get('shot', 'A'),
                     "deskripsi_adegan": norm.get('deskripsi_adegan', ''),
+                    "description": norm.get('deskripsi_adegan', ''),
                     "script": norm.get('script', '-'),
+                    "script_dialogue": norm.get('script', '-'),
                     "prompt_gambar": norm.get('prompt_gambar', ''),
                     "deskripsi_visual": norm.get('deskripsi_visual', ''),
+                    "visual_description": norm.get('deskripsi_visual', ''),
                     "durasi": norm.get('durasi', '3s'),
                     "transisi": norm.get('transisi', 'cut to cut'),
                     "audio": norm.get('audio', ''),
-                    "keterangan": norm.get('keterangan', '')
+                    "keterangan": norm.get('keterangan', ''),
+                    "location": norm.get('keterangan', '')
                 }
 
             extracted_list = []
