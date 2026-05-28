@@ -17,6 +17,8 @@ function App() {
   const [sourceFiles, setSourceFiles] = useState([]);
   const [currentVisualDesc, setCurrentVisualDesc] = useState('');
   const [currentScriptDialogue, setCurrentScriptDialogue] = useState('');
+  const [currentBleuScore, setCurrentBleuScore] = useState(null);
+  const [currentNlpScores, setCurrentNlpScores] = useState(null);
   const [orchestrationStatus, setOrchestrationStatus] = useState('');
   const [useRag, setUseRag] = useState(true);
 
@@ -100,9 +102,13 @@ function App() {
     const currentPrompt = prompt;
     const currentVis = currentVisualDesc;
     const currentScript = currentScriptDialogue;
+    const currentBleu = currentBleuScore;
+    const currentNlp = currentNlpScores;
     setPrompt('');
     setCurrentVisualDesc('');
     setCurrentScriptDialogue('');
+    setCurrentBleuScore(null);
+    setCurrentNlpScores(null);
 
     try {
       // 1. Send generation request
@@ -110,7 +116,9 @@ function App() {
         prompt: currentPrompt,
         visual_description: currentVis || null,
         script_dialogue: currentScript || null,
-        use_rag: useRag
+        use_rag: useRag,
+        bleu_score: currentBleu,
+        nlp_scores: currentNlp
       });
       const taskId = startRes.data.task_id;
 
@@ -131,7 +139,9 @@ function App() {
               visual_description: statusRes.data.result.visual_description,
               script_dialogue: statusRes.data.result.script_dialogue,
               rag_context: statusRes.data.result.rag_context,
-              mode_ablasi: statusRes.data.result.mode_ablasi
+              mode_ablasi: statusRes.data.result.mode_ablasi,
+              bleu_score: statusRes.data.result.bleu_score,
+              nlp_scores: statusRes.data.result.nlp_scores
             }]);
             setIsGenerating(false);
             setOrchestrationStatus('');
@@ -209,7 +219,9 @@ function App() {
                     keterangan: s.keterangan,
                     url: s.image_url ? (s.image_url.startsWith('http') ? s.image_url : `${API_URL}${s.image_url}`) : null,
                     isUpscaling: false,
-                    isGeneratingStatus: s.is_generating !== undefined ? s.is_generating : false
+                    isGeneratingStatus: s.is_generating !== undefined ? s.is_generating : false,
+                    bleu_score: s.bleu_score,
+                    nlp_scores: s.nlp_scores
                 }));
                 setImages(mappedUrls);
             }
@@ -225,7 +237,8 @@ function App() {
                     scene_no: s.scene_no, 
                     shot_letter: s.shot_letter, durasi: s.durasi, transisi: s.transisi, audio: s.audio, keterangan: s.keterangan,
                     url: s.image_url ? (s.image_url.startsWith('http') ? s.image_url : `${API_URL}${s.image_url}`) : null,
-                    rag_context: s.rag_context, mode_ablasi: s.mode_ablasi, isUpscaling: false, isGeneratingStatus: false
+                    rag_context: s.rag_context, mode_ablasi: s.mode_ablasi, isUpscaling: false, isGeneratingStatus: false,
+                    bleu_score: s.bleu_score, nlp_scores: s.nlp_scores
                 }));
                 setImages(mappedUrls);
             }
@@ -591,6 +604,8 @@ function App() {
                           setPrompt(`Scene ${scene.scene_no} at ${scene.location}: ${scene.description}. Shot: ${scene.shot_type}`);
                           setCurrentVisualDesc(scene.visual_description || '');
                           setCurrentScriptDialogue(scene.script_dialogue || '');
+                          setCurrentBleuScore(scene.bleu_score || 0.0);
+                          setCurrentNlpScores(scene.nlp_scores || null);
                         }}
                       >
                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/5 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out" />
@@ -608,6 +623,30 @@ function App() {
                         <p className="text-sm text-cyan-200/70 leading-relaxed font-light relative z-10">
                           {scene.description}
                         </p>
+                        {scene.script_dialogue && scene.script_dialogue !== '-' && (
+                          <p className="text-sm italic text-cyan-400 mt-2 relative z-10">
+                            VO: "{scene.script_dialogue}"
+                          </p>
+                        )}
+                        {scene.nlp_scores && (
+                          <div className="mt-3 flex flex-wrap gap-1.5 relative z-10 font-mono text-[9px]">
+                            <span className="bg-slate-950/60 border border-cyan-800/30 text-cyan-300 px-1.5 py-0.5 rounded">
+                              B1: {(scene.nlp_scores.bleu1 * 100).toFixed(1)}%
+                            </span>
+                            <span className="bg-slate-950/60 border border-cyan-800/30 text-cyan-300 px-1.5 py-0.5 rounded">
+                              B2: {(scene.nlp_scores.bleu2 * 100).toFixed(1)}%
+                            </span>
+                            <span className="bg-slate-950/60 border border-cyan-800/30 text-cyan-300 px-1.5 py-0.5 rounded">
+                              B3: {(scene.nlp_scores.bleu3 * 100).toFixed(1)}%
+                            </span>
+                            <span className="bg-slate-950/60 border border-cyan-800/30 text-cyan-300 px-1.5 py-0.5 rounded">
+                              B4: {(scene.nlp_scores.bleu4 * 100).toFixed(1)}%
+                            </span>
+                            <span className="bg-emerald-950/40 border border-emerald-500/25 text-emerald-400 px-1.5 py-0.5 rounded">
+                              R-L: {(scene.nlp_scores.rougeL * 100).toFixed(1)}%
+                            </span>
+                          </div>
+                        )}
                         <p className="text-[10px] text-cyan-500/0 mt-2 group-hover:text-cyan-500/70 transition-colors uppercase tracking-widest font-semibold relative z-10">
                           Click to use as prompt
                         </p>
@@ -858,6 +897,31 @@ function App() {
                             <td className="px-2 py-4 align-middle border border-slate-700 font-bold text-sm text-cyan-200">{shotLetter}</td>
                             <td className="px-3 py-4 align-top border border-slate-700 text-left font-medium text-slate-300">
                               {renderWithItalics(img.original_prompt ? img.original_prompt : cleanedPrompt)}
+                              {img.nlp_scores ? (
+                                <div className="mt-2 flex flex-wrap gap-1.5 font-mono text-[8px]">
+                                  <span className="bg-slate-950/60 border border-cyan-800/30 text-cyan-300 px-1 py-0.2 rounded">
+                                    B1: {(img.nlp_scores.bleu1 * 100).toFixed(1)}%
+                                  </span>
+                                  <span className="bg-slate-950/60 border border-cyan-800/30 text-cyan-300 px-1 py-0.2 rounded">
+                                    B2: {(img.nlp_scores.bleu2 * 100).toFixed(1)}%
+                                  </span>
+                                  <span className="bg-slate-950/60 border border-cyan-800/30 text-cyan-300 px-1 py-0.2 rounded">
+                                    B3: {(img.nlp_scores.bleu3 * 100).toFixed(1)}%
+                                  </span>
+                                  <span className="bg-slate-950/60 border border-cyan-800/30 text-cyan-300 px-1 py-0.2 rounded">
+                                    B4: {(img.nlp_scores.bleu4 * 100).toFixed(1)}%
+                                  </span>
+                                  <span className="bg-emerald-950/40 border border-emerald-500/25 text-emerald-400 px-1 py-0.2 rounded">
+                                    R-L: {(img.nlp_scores.rougeL * 100).toFixed(1)}%
+                                  </span>
+                                </div>
+                              ) : (img.bleu_score !== undefined && img.bleu_score !== null && (
+                                <div className="mt-2 flex items-center gap-1.5">
+                                  <span className={`text-[9px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded border ${img.bleu_score > 0.05 ? 'text-emerald-400/80 bg-emerald-900/20 border-emerald-500/20' : 'text-amber-400/80 bg-amber-900/20 border-amber-500/20'}`}>
+                                    BLEU Similarity: {(img.bleu_score * 100).toFixed(2)}%
+                                  </span>
+                                </div>
+                              ))}
                             </td>
                             <td className="px-2 py-4 align-top border border-slate-700 font-medium">
                               {img.script_dialogue ? <span className="italic text-cyan-400">VO: "{renderWithItalics(img.script_dialogue)}"</span> : '-'}

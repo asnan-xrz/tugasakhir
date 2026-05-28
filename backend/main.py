@@ -38,6 +38,70 @@ app.add_middleware(
 # In-memory store for task statuses (use Redis or DB for production)
 tasks_db: Dict[str, Dict[str, Any]] = {}
 
+def calculate_nlp_scores(reference_text: str, candidate_text: str) -> dict:
+    import re
+    from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
+    from rouge_score import rouge_scorer
+    
+    def normalize_tokens(text: str) -> list:
+        text_clean = re.sub(r'[^\w\s]', ' ', text.lower())
+        return [w for w in text_clean.split() if w]
+
+    # Reference preparation: split reference_text into sentences
+    sentences_list = re.split(r'[.\n?!]+', reference_text)
+    reference = [normalize_tokens(s) for s in sentences_list if s.strip()]
+    reference = [r for r in reference if r]
+    if not reference:
+        reference = [normalize_tokens(reference_text)]
+        
+    candidate = normalize_tokens(candidate_text)
+    
+    scores = {
+        "bleu1": 0.0,
+        "bleu2": 0.0,
+        "bleu3": 0.0,
+        "bleu4": 0.0,
+        "rougeL": 0.0
+    }
+    
+    if not candidate or not reference or not reference[0]:
+        return scores
+        
+    smoothie = SmoothingFunction().method4
+    
+    try:
+        scores["bleu1"] = sentence_bleu(reference, candidate, weights=(1.0, 0, 0, 0), smoothing_function=smoothie)
+        scores["bleu2"] = sentence_bleu(reference, candidate, weights=(0.5, 0.5, 0, 0), smoothing_function=smoothie)
+        scores["bleu3"] = sentence_bleu(reference, candidate, weights=(0.33, 0.33, 0.33, 0), smoothing_function=smoothie)
+        scores["bleu4"] = sentence_bleu(reference, candidate, weights=(0.25, 0.25, 0.25, 0.25), smoothing_function=smoothie)
+    except Exception as e:
+        print(f"Error calculating BLEU scores: {e}")
+        
+    try:
+        scorer = rouge_scorer.RougeScorer(['rougeL'], use_stemmer=True)
+        candidate_clean = " ".join(candidate)
+        
+        # Max ROUGE-L over split sentences to avoid document length mismatch penalty
+        best_rouge_l = 0.0
+        for s in sentences_list:
+            s_clean = " ".join(normalize_tokens(s))
+            if not s_clean:
+                continue
+            r_score = scorer.score(s_clean, candidate_clean)['rougeL'].fmeasure
+            if r_score > best_rouge_l:
+                best_rouge_l = r_score
+        
+        # Fallback to direct overall if sentences are empty or score is 0
+        if best_rouge_l == 0.0:
+            ref_clean = " ".join(normalize_tokens(reference_text))
+            best_rouge_l = scorer.score(ref_clean, candidate_clean)['rougeL'].fmeasure
+            
+        scores["rougeL"] = best_rouge_l
+    except Exception as e:
+        print(f"Error calculating ROUGE score: {e}")
+        
+    return scores
+
 class GenerationRequest(BaseModel):
     prompt: str
     visual_description: Optional[str] = None
@@ -45,6 +109,8 @@ class GenerationRequest(BaseModel):
     use_rag: bool = True
     base_model_path: Optional[str] = None
     lora_path: Optional[str] = None
+    bleu_score: Optional[float] = None
+    nlp_scores: Optional[Dict[str, float]] = None
 
 class FullGenerationRequest(BaseModel):
     concept: str
@@ -64,7 +130,7 @@ class TaskStatusResponse(BaseModel):
 # Semaphore untuk membatasi proses GPU agar tidak concurrent memory OOM pada RTX 3050 (6GB)
 gpu_semaphore = asyncio.Semaphore(1)
 
-async def async_generate_storyboard(task_id: str, prompt: str, visual_description: str = None, use_rag: bool = True, script_dialogue: str = None, base_model_path: str = None, lora_path: str = None):
+async def async_generate_storyboard(task_id: str, prompt: str, visual_description: str = None, use_rag: bool = True, script_dialogue: str = None, base_model_path: str = None, lora_path: str = None, bleu_score: float = None, nlp_scores: dict = None):
     """
     Background Task to handle text-to-image generation asynchronously inside a GPU queue.
     """
@@ -145,7 +211,9 @@ async def async_generate_storyboard(task_id: str, prompt: str, visual_descriptio
                 "rag_context": visual_contexts,
                 "rag_sources": rag_sources, # Menyimpan metadata visual
                 "mode_ablasi": not use_rag,
-                "script_dialogue": script_dialogue
+                "script_dialogue": script_dialogue,
+                "bleu_score": bleu_score,
+                "nlp_scores": nlp_scores
             }
             
         except Exception as e:
@@ -280,6 +348,8 @@ async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bo
         
         # PRE-POPULATE Scenes so UI can render the standard Storyboard Table before image synthesis begins!
         for idx, scene in enumerate(scenes):
+            candidate_text = f"{scene.get('deskripsi_adegan', '')} {scene.get('script', '')}"
+            nlp_scores = calculate_nlp_scores(concept, candidate_text)
             tasks_db[task_id]["result_scenes"].append({
                 "image_url": None,
                 "enhanced_prompt": scene.get('prompt_gambar', ""),
@@ -293,7 +363,9 @@ async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bo
                 "shot_letter": scene.get('shot', ""),
                 "keterangan": scene.get('keterangan', ""),
                 "id": f"{task_id}_{idx+1}",
-                "is_generating": True
+                "is_generating": True,
+                "bleu_score": nlp_scores["bleu4"],
+                "nlp_scores": nlp_scores
             })
         
         for idx, scene in enumerate(scenes):
@@ -348,6 +420,8 @@ async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bo
                     lora_path=lora_path
                 )
             
+            candidate_text = f"{scene.get('deskripsi_adegan', '')} {scene.get('script', '')}"
+            nlp_scores = calculate_nlp_scores(concept, candidate_text)
             frame_result = {
                 "id": f"{task_id}_{idx+1}",
                 "image_url": f"/outputs/{output_filename}",
@@ -364,7 +438,9 @@ async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bo
                 "rag_context": visual_contexts,
                 "rag_sources": rag_sources,
                 "mode_ablasi": not use_rag,
-                "is_generating": False
+                "is_generating": False,
+                "bleu_score": nlp_scores["bleu4"],
+                "nlp_scores": nlp_scores
             }
             
             # Since this takes 15 mins, we push incremental results!
@@ -404,7 +480,7 @@ async def start_generation(req: GenerationRequest, background_tasks: BackgroundT
     tasks_db[task_id] = {"status": "pending", "result": None}
     
     # Offload heavy AI processing to background task
-    background_tasks.add_task(async_generate_storyboard, task_id, req.prompt, req.visual_description, req.use_rag, req.script_dialogue, req.base_model_path, req.lora_path)
+    background_tasks.add_task(async_generate_storyboard, task_id, req.prompt, req.visual_description, req.use_rag, req.script_dialogue, req.base_model_path, req.lora_path, req.bleu_score, req.nlp_scores)
     
     return TaskStatusResponse(task_id=task_id, status="pending")
 
@@ -535,7 +611,25 @@ async def upload_script(file: UploadFile = File(...)):
         if not scenes:
             raise HTTPException(status_code=400, detail="Gagal mengekstrak scene dari naskah. Silakan coba lagi atau cek format naskah.")
         
-        return {"filename": file.filename, "scenes": scenes}
+        try:
+            for s in scenes:
+                candidate_text = f"{s.get('deskripsi_adegan', '')} {s.get('script', '')}"
+                nlp_scores = calculate_nlp_scores(extracted_text, candidate_text)
+                s["nlp_scores"] = nlp_scores
+                # Maintain compatibility by setting bleu_score to bleu4
+                s["bleu_score"] = nlp_scores["bleu4"]
+                    
+            generated_text = " ".join([f"{s.get('deskripsi_adegan', '')} {s.get('script', '')}" for s in scenes])
+            overall_scores = calculate_nlp_scores(extracted_text, generated_text)
+            print(f"Calculated Optimized Overall NLP Scores: {overall_scores}")
+        except Exception as bleu_err:
+            print(f"Failed to calculate optimized NLP scores: {bleu_err}")
+            for s in scenes:
+                s["nlp_scores"] = {"bleu1": 0.0, "bleu2": 0.0, "bleu3": 0.0, "bleu4": 0.0, "rougeL": 0.0}
+                s["bleu_score"] = 0.0
+            overall_scores = {"bleu1": 0.0, "bleu2": 0.0, "bleu3": 0.0, "bleu4": 0.0, "rougeL": 0.0}
+
+        return {"filename": file.filename, "scenes": scenes, "bleu_score": overall_scores["bleu4"], "nlp_scores": overall_scores}
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
