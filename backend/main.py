@@ -111,6 +111,7 @@ class GenerationRequest(BaseModel):
     lora_path: Optional[str] = None
     bleu_score: Optional[float] = None
     nlp_scores: Optional[Dict[str, float]] = None
+    prompt_technique: str = "zero-shot"
 
 class FullGenerationRequest(BaseModel):
     concept: str
@@ -130,7 +131,7 @@ class TaskStatusResponse(BaseModel):
 # Semaphore untuk membatasi proses GPU agar tidak concurrent memory OOM pada RTX 3050 (6GB)
 gpu_semaphore = asyncio.Semaphore(1)
 
-async def async_generate_storyboard(task_id: str, prompt: str, visual_description: str = None, use_rag: bool = True, script_dialogue: str = None, base_model_path: str = None, lora_path: str = None, bleu_score: float = None, nlp_scores: dict = None):
+async def async_generate_storyboard(task_id: str, prompt: str, visual_description: str = None, use_rag: bool = True, script_dialogue: str = None, base_model_path: str = None, lora_path: str = None, bleu_score: float = None, nlp_scores: dict = None, prompt_technique: str = "zero-shot"):
     """
     Background Task to handle text-to-image generation asynchronously inside a GPU queue.
     """
@@ -188,7 +189,8 @@ async def async_generate_storyboard(task_id: str, prompt: str, visual_descriptio
             enhanced_prompt = await enhance_prompt(
                 base_prompt=prompt,
                 visual_description=visual_description,
-                context_str=context_str
+                context_str=context_str,
+                technique=prompt_technique
             )
             
             print(f"[Task {task_id}] Queueing Stable Diffusion Generation...")
@@ -480,7 +482,7 @@ async def start_generation(req: GenerationRequest, background_tasks: BackgroundT
     tasks_db[task_id] = {"status": "pending", "result": None}
     
     # Offload heavy AI processing to background task
-    background_tasks.add_task(async_generate_storyboard, task_id, req.prompt, req.visual_description, req.use_rag, req.script_dialogue, req.base_model_path, req.lora_path, req.bleu_score, req.nlp_scores)
+    background_tasks.add_task(async_generate_storyboard, task_id, req.prompt, req.visual_description, req.use_rag, req.script_dialogue, req.base_model_path, req.lora_path, req.bleu_score, req.nlp_scores, req.prompt_technique)
     
     return TaskStatusResponse(task_id=task_id, status="pending")
 

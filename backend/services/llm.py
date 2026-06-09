@@ -4,14 +4,44 @@ from typing import List, Dict, Any
 
 # Stub for LLM generation (e.g. Ollama)
 
-async def enhance_prompt(base_prompt: str, visual_description: str = None, context_str: str = "") -> str:
+async def enhance_prompt(base_prompt: str, visual_description: str = None, context_str: str = "", technique: str = "zero-shot") -> str:
     """
     Given a raw prompt (scene description), optionally visual descriptors and RAG contexts,
     uses the local LLM (Ollama) as an AI Director to produce a highly detailed, professional cinematography prompt.
     """
-    print(f"Director AI enhancing prompt...")
+    print(f"Director AI enhancing prompt with technique: {technique}...")
     
-    director_prompt = f"""You are a professional Film Director and Cinematographer.
+    if technique == "few-shot":
+        director_prompt = f"""You are a professional Film Director and Cinematographer.
+Your job is to translate the following scene description into a highly technical, comma-separated image generation prompt for Stable Diffusion.
+Focus on extracting the location, action, characters, and applying professional cinematography terms: Camera Angle (e.g., Low angle, High angle, Eye level), Framing (e.g., Close Up, Medium Shot, Long Shot), and Lighting (e.g., Warm, Cinematic, Natural).
+Return ONLY the final prompt string without any conversational text or quotes.
+
+Example 1:
+Scene: Budi berjalan di lorong gelap.
+Output: masterpiece, high resolution, 8k, highly detailed, Medium Shot, low key lighting, Budi walking down a dark corridor, dramatic shadows, cinematic lighting
+
+Example 2:
+Scene: Rina tersenyum melihat hujan di jendela.
+Output: masterpiece, high resolution, 8k, highly detailed, Close Up, warm lighting, Rina smiling looking at the rain through a window, soft reflections, cinematic lighting
+
+Example 3:
+Scene: Upacara bendera di lapangan sekolah pagi hari.
+Output: masterpiece, high resolution, 8k, highly detailed, Wide Shot, bright natural morning lighting, national flag raising ceremony on the school field, majestic atmosphere, cinematic lighting
+
+Scene Context: {base_prompt}
+"""
+    elif technique == "cot":
+        director_prompt = f"""You are a professional Film Director and Cinematographer.
+Your job is to translate the following scene description into a highly technical, comma-separated image generation prompt for Stable Diffusion.
+Focus on extracting the location, action, characters, and applying professional cinematography terms: Camera Angle (e.g., Low angle, High angle, Eye level), Framing (e.g., Close Up, Medium Shot, Long Shot), and Lighting (e.g., Warm, Cinematic, Natural).
+
+Instructions: Let's think step by step: first analyze the mood, then choose camera angle, then lighting, finally output the prompt enclosed in <final_prompt> tags (e.g., <final_prompt>masterpiece, high resolution, ...</final_prompt>).
+
+Scene Context: {base_prompt}
+"""
+    else: # zero-shot
+        director_prompt = f"""You are a professional Film Director and Cinematographer.
 Your job is to translate the following scene description into a highly technical, comma-separated image generation prompt for Stable Diffusion.
 Focus on extracting the location, action, characters, and applying professional cinematography terms: Camera Angle (e.g., Low angle, High angle, Eye level), Framing (e.g., Close Up, Medium Shot, Long Shot), and Lighting (e.g., Warm, Cinematic, Natural).
 Return ONLY the final prompt string without any conversational text or quotes.
@@ -50,6 +80,12 @@ Scene Context: {base_prompt}
             response.raise_for_status()
             result: Dict[str, Any] = response.json()
             response_text = result.get("response", "").strip().strip('"').strip("'")
+            
+            if technique == "cot":
+                import re
+                match = re.search(r'<final_prompt>(.*?)</final_prompt>', response_text, re.DOTALL)
+                if match:
+                    response_text = match.group(1).strip()
             
             # Additional safety net just in case Llama outputs conversational junk like "Here is the prompt: "
             prefixes_to_strip = ["Here is", "The prompt", "Here's", "Sure"]
@@ -96,7 +132,6 @@ Berdasarkan input cerita dari pengguna, rumuskan storyboard lengkap ke format JS
   "scenes": [
     {{
       "scene": 1,
-      "shot": "A",
       "deskripsi_adegan": "Deskripsi cerita, alur, dan mood dalam Bahasa Indonesia.",
       "script": "Teks dialog atau VO (kalimat langsung, bervariasi tiap adegan).",
       "prompt_gambar": "Detailed English prompt for text-to-image generation.",
@@ -183,8 +218,6 @@ Script:
                     lk = str(k).lower().replace(' ', '_').replace('-', '_')
                     if 'scene' in lk or 'no' in lk or 'id' == lk:
                         norm['scene'] = v
-                    elif 'shot' in lk:
-                        norm['shot'] = v
                     elif 'adegan' in lk or 'desc' in lk or 'cerita' in lk:
                         norm['deskripsi_adegan'] = v
                     elif 'script' in lk or 'dialog' in lk or 'voice' in lk:
@@ -206,9 +239,6 @@ Script:
                 return {
                     "scene": norm.get('scene', 1),
                     "scene_no": norm.get('scene', 1),
-                    "shot": norm.get('shot', 'A'),
-                    "shot_type": norm.get('shot', 'A'),
-                    "shot_letter": norm.get('shot', 'A'),
                     "deskripsi_adegan": norm.get('deskripsi_adegan', ''),
                     "description": norm.get('deskripsi_adegan', ''),
                     "script": norm.get('script', '-'),
@@ -277,7 +307,6 @@ Berdasarkan input konsep pengguna, jabarkan menjadi storyboard lengkap (5-8 adeg
   "scenes": [
     {{
       "scene": 1,
-      "shot": "A",
       "deskripsi_adegan": "Deskripsi cerita, alur, dan mood dalam Bahasa Indonesia.",
       "script": "Teks dialog atau VO (kalimat langsung, dinamis, dan tidak diulang-ulang).",
       "prompt_gambar": "Detailed English prompt for text-to-image generation.",
@@ -376,9 +405,6 @@ Concept Idea:
                 return {
                     "scene": norm.get('scene', 1),
                     "scene_no": norm.get('scene', 1),
-                    "shot": norm.get('shot', 'A'),
-                    "shot_type": norm.get('shot', 'A'),
-                    "shot_letter": norm.get('shot', 'A'),
                     "deskripsi_adegan": norm.get('deskripsi_adegan', ''),
                     "description": norm.get('deskripsi_adegan', ''),
                     "script": norm.get('script', '-'),
