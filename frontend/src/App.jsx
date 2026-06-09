@@ -21,6 +21,7 @@ function App() {
   const [currentNlpScores, setCurrentNlpScores] = useState(null);
   const [orchestrationStatus, setOrchestrationStatus] = useState('');
   const [useRag, setUseRag] = useState(true);
+  const [promptTechnique, setPromptTechnique] = useState('zero-shot');
 
   // Full Auto Storyboard States
   const [inputMode, setInputMode] = useState('manual'); // 'manual' | 'auto'
@@ -118,7 +119,8 @@ function App() {
         script_dialogue: currentScript || null,
         use_rag: useRag,
         bleu_score: currentBleu,
-        nlp_scores: currentNlp
+        nlp_scores: currentNlp,
+        prompt_technique: promptTechnique
       });
       const taskId = startRes.data.task_id;
 
@@ -212,7 +214,6 @@ function App() {
                     script_dialogue: s.script_dialogue,
                     visual_description: s.visual_description,
                     scene_no: s.scene_no,
-                    shot_letter: s.shot_letter,
                     durasi: s.durasi,
                     transisi: s.transisi,
                     audio: s.audio,
@@ -235,7 +236,7 @@ function App() {
                     id: s.id, prompt: s.enhanced_prompt, original_prompt: s.original_prompt,
                     script_dialogue: s.script_dialogue, visual_description: s.visual_description,
                     scene_no: s.scene_no, 
-                    shot_letter: s.shot_letter, durasi: s.durasi, transisi: s.transisi, audio: s.audio, keterangan: s.keterangan,
+                    durasi: s.durasi, transisi: s.transisi, audio: s.audio, keterangan: s.keterangan,
                     url: s.image_url ? (s.image_url.startsWith('http') ? s.image_url : `${API_URL}${s.image_url}`) : null,
                     rag_context: s.rag_context, mode_ablasi: s.mode_ablasi, isUpscaling: false, isGeneratingStatus: false,
                     bleu_score: s.bleu_score, nlp_scores: s.nlp_scores
@@ -365,7 +366,6 @@ function App() {
               const deskripsiAdegan = imgState.original_prompt ? imgState.original_prompt : cleanedPrompt;
               const dialog = imgState.script_dialogue ? `VO: "${imgState.script_dialogue}"` : "-";
               const sceneNum = imgState.scene_no || (i + 1);
-              const shotLetter = imgState.shot_letter || String.fromCharCode(65 + (i % 26));
               const duration = imgState.durasi || '3s';
               const transition = imgState.transisi || 'cut to cut';
               const audio = imgState.audio || (imgState.script_dialogue ? 'Voice dialogue, ambient background' : 'BGM Cinematic, ambient');
@@ -373,7 +373,6 @@ function App() {
 
               tableBody.push([
                   sceneNum, 
-                  shotLetter,
                   deskripsiAdegan,
                   dialog,
                   "", // Placeholder untuk image render di didDrawCell
@@ -382,13 +381,13 @@ function App() {
                   transition,
                   audio,
                   keterangan,
-                  base64Img // Index 10 rahasia untuk extract
+                  base64Img // Index 9 rahasia untuk extract
               ]);
           }
 
           autoTable(doc, {
               startY: 90,
-              head: [['SCENE', 'SHOT', 'DESKRIPSI ADEGAN', 'SCRIPT', 'VISUALISASI', 'DESKRIPSI VISUAL', 'DURASI', 'TRANSISI', 'AUDIO', 'KETERANGAN']],
+              head: [['SCENE', 'DESKRIPSI ADEGAN', 'SCRIPT', 'VISUALISASI', 'DESKRIPSI VISUAL', 'DURASI', 'TRANSISI', 'AUDIO', 'KETERANGAN']],
               body: tableBody,
               styles: {
                   valign: 'middle',
@@ -407,20 +406,19 @@ function App() {
               },
               columnStyles: {
                   0: { cellWidth: 30, halign: 'center', fontStyle: 'bold' },
-                  1: { cellWidth: 30, halign: 'center', fontStyle: 'bold' },
-                  2: { cellWidth: 100 },
-                  3: { cellWidth: 100, fontStyle: 'italic' },
-                  4: { cellWidth: 120 }, // Visual space
-                  5: { cellWidth: 100 },
-                  6: { cellWidth: 40, halign: 'center' },
-                  7: { cellWidth: 50, halign: 'center' },
-                  8: { cellWidth: 90 },
-                  9: { cellWidth: 'auto' }
+                  1: { cellWidth: 100 },
+                  2: { cellWidth: 100, fontStyle: 'italic' },
+                  3: { cellWidth: 120 }, // Visual space
+                  4: { cellWidth: 100 },
+                  5: { cellWidth: 40, halign: 'center' },
+                  6: { cellWidth: 50, halign: 'center' },
+                  7: { cellWidth: 90 },
+                  8: { cellWidth: 'auto' }
               },
               didDrawCell: function (data) {
-                  // Jika ini sel visual dan dibagian body (Kolom ke-4 adalah indeks 4)
-                  if (data.section === 'body' && data.column.index === 4) {
-                      const base64Img = data.row.raw[10]; // Extract dari rahasia array 
+                  // Jika ini sel visual dan dibagian body (Kolom ke-4 adalah indeks 3)
+                  if (data.section === 'body' && data.column.index === 3) {
+                      const base64Img = data.row.raw[9]; // Extract dari rahasia array 
                       if (base64Img) {
                           const dim = 100; // Smaller dim to fit 10 columns
                           const x = data.cell.x + 10;
@@ -601,7 +599,7 @@ function App() {
                         key={idx}
                         className="bg-[#0A0F1E]/80 border border-cyan-800/40 p-4 rounded-xl shadow-md cursor-pointer hover:border-cyan-400/50 hover:shadow-glow-subtle transition-all group relative overflow-hidden"
                         onClick={() => {
-                          setPrompt(`Scene ${scene.scene_no} at ${scene.location}: ${scene.description}. Shot: ${scene.shot_type}`);
+                          setPrompt(`Scene ${scene.scene_no} at ${scene.location}: ${scene.description}.`);
                           setCurrentVisualDesc(scene.visual_description || '');
                           setCurrentScriptDialogue(scene.script_dialogue || '');
                           setCurrentBleuScore(scene.bleu_score || 0.0);
@@ -612,9 +610,6 @@ function App() {
                         <div className="flex justify-between items-start mb-3 relative z-10">
                           <span className="text-xs font-bold px-2 py-1 bg-cyan-900/50 text-cyan-300 rounded-md border border-cyan-700/50">
                             SCENE {scene.scene_no}
-                          </span>
-                          <span className="text-[10px] tracking-wider uppercase bg-emerald-900/20 border border-emerald-500/30 text-emerald-400 px-2 py-1 rounded">
-                            {scene.shot_type}
                           </span>
                         </div>
                         <p className="text-sm text-cyan-100 font-medium mb-1 relative z-10 flex items-center gap-2">
@@ -700,6 +695,37 @@ function App() {
                     <div className={`dot absolute left-1 top-1 bg-white w-2 h-2 rounded-full transition-transform duration-300 ${useRag ? 'transform translate-x-4' : ''}`}></div>
                   </div>
                 </label>
+              </div>
+
+              {/* Prompting Technique Selection */}
+              <div className="flex gap-2 mb-3">
+                <button
+                  onClick={() => setPromptTechnique('zero-shot')}
+                  className={`flex-1 py-1.5 px-2 rounded-lg border text-[9px] font-bold tracking-wider transition-all duration-300
+                    ${promptTechnique === 'zero-shot'
+                      ? 'border-cyan-500 bg-cyan-900/40 text-cyan-200 shadow-[0_0_10px_rgba(6,182,212,0.2)]'
+                      : 'border-cyan-900/40 bg-transparent text-cyan-600/70 hover:text-cyan-400 hover:border-cyan-500/30'}`}
+                >
+                  ZERO-SHOT
+                </button>
+                <button
+                  onClick={() => setPromptTechnique('few-shot')}
+                  className={`flex-1 py-1.5 px-2 rounded-lg border text-[9px] font-bold tracking-wider transition-all duration-300
+                    ${promptTechnique === 'few-shot'
+                      ? 'border-cyan-500 bg-cyan-900/40 text-cyan-200 shadow-[0_0_10px_rgba(6,182,212,0.2)]'
+                      : 'border-cyan-900/40 bg-transparent text-cyan-600/70 hover:text-cyan-400 hover:border-cyan-500/30'}`}
+                >
+                  FEW-SHOT
+                </button>
+                <button
+                  onClick={() => setPromptTechnique('cot')}
+                  className={`flex-1 py-1.5 px-2 rounded-lg border text-[9px] font-bold tracking-wider transition-all duration-300
+                    ${promptTechnique === 'cot'
+                      ? 'border-cyan-500 bg-cyan-900/40 text-cyan-200 shadow-[0_0_10px_rgba(6,182,212,0.2)]'
+                      : 'border-cyan-900/40 bg-transparent text-cyan-600/70 hover:text-cyan-400 hover:border-cyan-500/30'}`}
+                >
+                  CHAIN-OF-THOUGHT
+                </button>
               </div>
 
               <div className="relative flex items-center bg-[#0A0F1E] border border-cyan-900/50 rounded-2xl p-2 shadow-[inset_0_2px_10px_rgba(0,255,255,0.02)] focus-within:border-cyan-400/50 focus-within:shadow-[0_0_15px_rgba(0,255,255,0.1),inset_0_2px_15px_rgba(0,255,255,0.05)] transition-all ease-out duration-300 ring-1 ring-black/50">
@@ -862,8 +888,7 @@ function App() {
                   <table className="w-full text-center text-[11px] whitespace-normal tabular-nums border-collapse border-slate-800">
                     <thead className="bg-[#0A1A2F] font-extrabold text-cyan-50 border-b border-slate-800">
                       <tr>
-                        <th className="border border-slate-700 p-2 w-[4%]">SCENE<br/><span className="text-[9px] font-normal italic text-cyan-600/60">*No. Scene*</span></th>
-                        <th className="border border-slate-700 p-2 w-[4%]">SHOT<br/><span className="text-[9px] font-normal italic text-cyan-600/60">*No. Shot*</span></th>
+                        <th className="border border-slate-700 p-2 w-[8%]">SCENE<br/><span className="text-[9px] font-normal italic text-cyan-600/60">*No. Scene*</span></th>
                         <th className="border border-slate-700 p-2 w-[14%]">DESKRIPSI ADEGAN<br/><span className="text-[9px] font-normal italic text-cyan-600/60">*Deskripsi cerita/adegan, alur, mood*</span></th>
                         <th className="border border-slate-700 p-2 w-[10%]">SCRIPT<br/><span className="text-[9px] font-normal italic text-cyan-600/60">*Dialog atau voice over*</span></th>
                         <th className="border border-slate-700 p-2 w-[22%]">VISUALISASI DAN REFERENSI<br/><span className="text-[9px] font-normal italic text-cyan-600/60">*Gambaran visual dari adegan*</span></th>
@@ -885,7 +910,6 @@ function App() {
                                                         .replace(/,/g, ' ')
                                                         .replace(/\s+/g, ' ').trim();
                                                         
-                        const shotLetter = img.shot_letter || String.fromCharCode(65 + (index % 26));
                         const duration = img.durasi || '3s';
                         const transition = img.transisi || 'cut to cut';
                         const audio = img.audio || (img.script_dialogue ? 'Voice dialogue, ambient background' : 'BGM Cinematic, ambient');
@@ -894,7 +918,6 @@ function App() {
                         return (
                           <tr key={img.id} className="transition-colors hover:bg-slate-800/40">
                             <td className="px-2 py-4 align-middle border border-slate-700 font-bold text-sm text-cyan-100">{img.scene_no || index + 1}</td>
-                            <td className="px-2 py-4 align-middle border border-slate-700 font-bold text-sm text-cyan-200">{shotLetter}</td>
                             <td className="px-3 py-4 align-top border border-slate-700 text-left font-medium text-slate-300">
                               {renderWithItalics(img.original_prompt ? img.original_prompt : cleanedPrompt)}
                               {img.nlp_scores ? (
