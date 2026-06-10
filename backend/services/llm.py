@@ -267,7 +267,11 @@ Script:
             elif isinstance(scenes, list):
                 extracted_list = scenes
                 
-            return [normalize_scene(x) for x in extracted_list if isinstance(x, dict)]
+            normalized = [normalize_scene(x) for x in extracted_list if isinstance(x, dict)]
+            for i, scene in enumerate(normalized):
+                scene['scene'] = i + 1
+                scene['scene_no'] = i + 1
+            return normalized
             
     except Exception as e:
         print(f"Error parsing Ollama response: {type(e).__name__} - {str(e)}")
@@ -432,7 +436,11 @@ Concept Idea:
             elif isinstance(scenes, list):
                 extracted_list = scenes
                 
-            return [normalize_scene(x) for x in extracted_list if isinstance(x, dict)]
+            normalized = [normalize_scene(x) for x in extracted_list if isinstance(x, dict)]
+            for i, scene in enumerate(normalized):
+                scene['scene'] = i + 1
+                scene['scene_no'] = i + 1
+            return normalized
             
     except Exception as e:
         print(f"Error generating full scenes: {type(e).__name__} - {str(e)}")
