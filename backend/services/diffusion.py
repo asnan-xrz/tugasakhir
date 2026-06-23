@@ -15,6 +15,7 @@ civitai_api_key = os.getenv("CIVITAI_API_KEY")
 
 pipe = None
 current_base_model = None
+current_lora_path = None
 
 MODELS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
 os.makedirs(MODELS_DIR, exist_ok=True)
@@ -110,6 +111,7 @@ async def download_model_from_civitai(model_version_id: str, save_path: str, is_
 def _get_pipe(base_model_path=None, lora_path=None, use_ip_adapter=False):
     global pipe
     global current_base_model
+    global current_lora_path
     
     # === RTX 3050 6GB SAFETY: Cap CUDA memory to 80% to prevent power surge shutdown ===
     if torch.cuda.is_available():
@@ -124,6 +126,7 @@ def _get_pipe(base_model_path=None, lora_path=None, use_ip_adapter=False):
         if pipe is not None:
             del pipe
             pipe = None
+            current_lora_path = None
             gc.collect()
             torch.cuda.empty_cache()
             # Allow GPU to cool down briefly after full unload
@@ -137,7 +140,7 @@ def _get_pipe(base_model_path=None, lora_path=None, use_ip_adapter=False):
                 base_model_path,
                 torch_dtype=torch.float16,
                 safety_checker=None,
-                low_cpu_mem_usage=True
+                low_cpu_mem_usage=False
             )
         else:
             pipe = StableDiffusionPipeline.from_pretrained(
@@ -145,22 +148,12 @@ def _get_pipe(base_model_path=None, lora_path=None, use_ip_adapter=False):
                 torch_dtype=torch.float16,
                 safety_checker=None,
                 token=hf_token,
-                low_cpu_mem_usage=True
+                low_cpu_mem_usage=False
             )
             
         current_base_model = base_model_path
         
-        # === KRITIS: sequential offload jauh lebih hemat dibanding model_cpu_offload ===
-        # model_cpu_offload pindahin satu model penuh ke GPU sekaligus (~3-4GB)
-        # sequential offload cuma mindahin 1 layer ke GPU (~200-400MB peak)
-        pipe.enable_sequential_cpu_offload()
-        
-        # Aktifkan VAE slicing agar decode gambar nggak makan >1GB sekaligus
-        pipe.enable_vae_slicing()
-        pipe.enable_vae_tiling()
-
         # IP-Adapter HANYA dimuat kalau memang ada reference image beneran
-        # Karena IP-Adapter sendiri makan ~1GB VRAM tambahan
         if use_ip_adapter:
             try:
                 pipe.load_ip_adapter("h94/IP-Adapter", subfolder="models", weight_name="ip-adapter_sd15.bin")
@@ -169,25 +162,44 @@ def _get_pipe(base_model_path=None, lora_path=None, use_ip_adapter=False):
                 print(f"⚠️ Warning: Could not load IP-Adapter: {e}")
         else:
             print("ℹ️ IP-Adapter SKIPPED — no reference image. Saves ~1GB VRAM.")
-
-    # Remove active LoRAs to prevent conflicts with multiple LoRAs
-    try:
-        if hasattr(pipe, 'unload_lora_weights'):
-            pipe.unload_lora_weights()
-    except Exception:
-        pass
-    
-    if lora_path is None:
-        lora_path = os.path.join(MODELS_DIR, "itstv_style.safetensors")
+            
+        # === FIX: Use model_cpu_offload instead of sequential_cpu_offload ===
+        # sequential_cpu_offload causes "Cannot copy out of meta tensor" when loading LoRAs dynamically.
+        # model_cpu_offload is still extremely memory efficient (well within 6GB limits) but safe for LoRAs.
+        # MUST BE CALLED AFTER IP-ADAPTER IS LOADED!
+        pipe.enable_model_cpu_offload()
         
-    if os.path.exists(lora_path):
+        # Aktifkan VAE slicing agar decode gambar nggak makan >1GB sekaligus
+        pipe.enable_vae_slicing()
+        pipe.enable_vae_tiling()
+
+    if lora_path is None:
+        # Prioritas: lora_output_its (hasil training terbaru), fallback ke models/
+        default_lora = os.path.join(os.path.dirname(MODELS_DIR), "ai", "lora_output_its", "pytorch_lora_weights.safetensors")
+        if not os.path.exists(default_lora):
+            default_lora = os.path.join(MODELS_DIR, "its_new_lora.safetensors")
+        lora_path = default_lora
+        
+    if current_lora_path != lora_path:
+        print(f"🔄 Swapping/Loading LoRA: {lora_path}")
+        # Remove active LoRAs to prevent conflicts
         try:
-            pipe.load_lora_weights(lora_path)
-            print(f"✅ LoRA weights successfully loaded from: {lora_path}")
-        except Exception as e:
-            print(f"⚠️ Failed to load LoRA weights: {e}")
-    else:
-        print(f"⚠️ Warning: LoRA weights not found at {lora_path}. Skipping LoRA.")
+            if hasattr(pipe, 'unload_lora_weights'):
+                pipe.unload_lora_weights()
+        except Exception:
+            pass
+            
+        if os.path.exists(lora_path):
+            try:
+                pipe.load_lora_weights(lora_path)
+                current_lora_path = lora_path
+                print(f"✅ LoRA weights successfully loaded from: {lora_path}")
+            except Exception as e:
+                print(f"⚠️ Failed to load LoRA weights: {e}")
+                current_lora_path = None
+        else:
+            print(f"⚠️ Warning: LoRA weights not found at {lora_path}. Skipping LoRA.")
+            current_lora_path = None
 
     return pipe
 
@@ -206,17 +218,26 @@ def _generate_sync(prompt: str, output_path: str, image_reference: str = None, b
     p = _get_pipe(base_model_path, lora_path, use_ip_adapter=has_real_reference)
     
     if lora_path is None:
-        lora_path = os.path.join(MODELS_DIR, "itstv_style.safetensors")
+        # Prioritas: lora_output_its (hasil training terbaru), fallback ke models/
+        default_lora = os.path.join(os.path.dirname(MODELS_DIR), "ai", "lora_output_its", "pytorch_lora_weights.safetensors")
+        if not os.path.exists(default_lora):
+            default_lora = os.path.join(MODELS_DIR, "its_new_lora.safetensors")
+        lora_path = default_lora
         
     filename = os.path.basename(lora_path)
     metadata = _load_metadata()
-    trained_words = metadata.get(filename, {}).get("trainedWords", [])
+    # Guard: trainedWords bisa null di JSON, paksa jadi list
+    trained_words = metadata.get(filename, {}).get("trainedWords", []) or []
     
     if not trained_words and filename == "itstv_style.safetensors":
         trained_words = ["itstvstyle"]
+    
+    # Trigger word khusus untuk LoRA hasil training dataset_combined
+    if not trained_words and "pytorch_lora_weights" in filename:
+        trained_words = ["itstvstyle"]
         
     for word in trained_words:
-        if word.lower() not in prompt.lower():
+        if word and word.lower() not in prompt.lower():
             prompt = f"{word}, {prompt}"
             
     kwargs = {
@@ -225,6 +246,11 @@ def _generate_sync(prompt: str, output_path: str, image_reference: str = None, b
         "num_inference_steps": SD_STEPS,
         "guidance_scale": SD_GUIDANCE,
     }
+    
+    # Balance LoRA intensity when combining with IP-Adapter
+    if lora_path and "its_new_lora.safetensors" in lora_path:
+        kwargs["cross_attention_kwargs"] = {"scale": 0.65}
+        
     ref_img = None
     from PIL import Image
     

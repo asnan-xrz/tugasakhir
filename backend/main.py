@@ -61,7 +61,8 @@ def calculate_nlp_scores(reference_text: str, candidate_text: str) -> dict:
         "bleu2": 0.0,
         "bleu3": 0.0,
         "bleu4": 0.0,
-        "rougeL": 0.0
+        "rougeL": 0.0,
+        "cosine": 0.0
     }
     
     if not candidate or not reference or not reference[0]:
@@ -100,7 +101,47 @@ def calculate_nlp_scores(reference_text: str, candidate_text: str) -> dict:
     except Exception as e:
         print(f"Error calculating ROUGE score: {e}")
         
+    try:
+        from collections import Counter
+        import math
+        
+        ref_counts = Counter(normalize_tokens(reference_text))
+        cand_counts = Counter(candidate)
+        
+        intersection = set(ref_counts.keys()) & set(cand_counts.keys())
+        numerator = sum([ref_counts[x] * cand_counts[x] for x in intersection])
+        
+        sum1 = sum([ref_counts[x]**2 for x in ref_counts.keys()])
+        sum2 = sum([cand_counts[x]**2 for x in cand_counts.keys()])
+        denominator = math.sqrt(sum1) * math.sqrt(sum2)
+        
+        if not denominator:
+            scores["cosine"] = 0.0
+        else:
+            scores["cosine"] = float(numerator) / denominator
+    except Exception as e:
+        print(f"Error calculating Cosine score: {e}")
+        
     return scores
+
+def calculate_rag_similarity(visual_contexts: list) -> float:
+    """
+    Converts ChromaDB L2 distances into a 0-100% similarity score.
+    Lower distance = higher similarity. Each frame will get a unique score
+    based on whichever images the RAG retriever actually found.
+    Returns 0.0 if no RAG context (ablation mode).
+    """
+    if not visual_contexts:
+        return 0.0
+    import math
+    scores = []
+    for ctx in visual_contexts:
+        dist = ctx.get('distance', 1.0)
+        # Convert L2 distance to similarity: sigmoid-based scale
+        # dist=0 -> 100%, dist=0.5 -> ~78%, dist=1.0 -> ~60%, dist=2.0 -> ~37%
+        sim = 100.0 * math.exp(-dist * 0.8)
+        scores.append(round(sim, 2))
+    return round(sum(scores) / len(scores), 2) if scores else 0.0
 
 class GenerationRequest(BaseModel):
     prompt: str
@@ -118,6 +159,7 @@ class FullGenerationRequest(BaseModel):
     use_rag: bool = True
     base_model_path: Optional[str] = None
     lora_path: Optional[str] = None
+    prompt_technique: str = "zero-shot"
 
 class ModelSyncRequest(BaseModel):
     base_model_id: Optional[str] = "128713" # Placeholder ID for Storyboard Sketch
@@ -130,6 +172,64 @@ class TaskStatusResponse(BaseModel):
 
 # Semaphore untuk membatasi proses GPU agar tidak concurrent memory OOM pada RTX 3050 (6GB)
 gpu_semaphore = asyncio.Semaphore(1)
+
+import re as _re
+_BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+
+def _pick_q_priority_image(visual_contexts: list) -> str:
+    """
+    Memilih gambar referensi untuk IP-Adapter dengan PRIORITAS Q-series (allaboutITS).
+    Dataset allaboutITS (Q*.jpg) lebih berkualitas — foto kampus ITS dengan resolusi tinggi
+    dan estetika yang lebih konsisten dibanding P/F/TC-series.
+    
+    Strategi:
+    1. Cari Q-series dari context RAG yang ada
+    2. Fallback ke seri lain jika tidak ada Q
+    3. Selalu strip suffix _aug{N} sebelum resolve ke filesystem
+    """
+    if not visual_contexts:
+        return None
+    
+    # Pass 1: cari Q-series dulu (allaboutITS — lebih berkualitas)
+    for ctx in visual_contexts:
+        src = ctx.get('source', '')
+        if not src or src == 'Unknown':
+            continue
+        src_clean = _re.sub(r'_aug\d+(?=\.)', '', src)
+        if src_clean.upper().startswith('Q'):
+            candidate = os.path.join(_BASE_DIR, 'ai', 'allaboutITS', src_clean)
+            if os.path.exists(candidate):
+                print(f"[IP-Adapter] ✅ Q-priority hit: {candidate} (dari src={src})")
+                return candidate
+    
+    # Pass 2: fallback ke seri lain jika tidak ada Q yang cocok
+    for ctx in visual_contexts:
+        src = ctx.get('source', '')
+        if not src or src == 'Unknown':
+            continue
+        src_clean = _re.sub(r'_aug\d+(?=\.)', '', src)
+        for img_dir in ['ai/allaboutITS', 'ai/images_its']:
+            candidate = os.path.join(_BASE_DIR, img_dir, src_clean)
+            if os.path.exists(candidate):
+                print(f"[IP-Adapter] ⚠️ Non-Q fallback: {candidate} (dari src={src})")
+                return candidate
+    
+    print("[IP-Adapter] ❌ Tidak ada referensi gambar yang valid ditemukan.")
+    return None
+
+def _rerank_q_first(visual_contexts: list) -> list:
+    """
+    Re-rank RAG contexts agar Q-series (allaboutITS) naik ke atas.
+    Ini memastikan LLM Director mendapat konteks teks dari dataset ITS terbaik.
+    """
+    if not visual_contexts:
+        return visual_contexts
+    q_items = [c for c in visual_contexts if c.get('source', '').upper().startswith('Q')]
+    non_q_items = [c for c in visual_contexts if not c.get('source', '').upper().startswith('Q')]
+    reranked = q_items + non_q_items
+    if q_items:
+        print(f"[RAG Re-rank] {len(q_items)} Q-series naik ke atas dari total {len(visual_contexts)} konteks.")
+    return reranked
 
 async def async_generate_storyboard(task_id: str, prompt: str, visual_description: str = None, use_rag: bool = True, script_dialogue: str = None, base_model_path: str = None, lora_path: str = None, bleu_score: float = None, nlp_scores: dict = None, prompt_technique: str = "zero-shot"):
     """
@@ -153,6 +253,9 @@ async def async_generate_storyboard(task_id: str, prompt: str, visual_descriptio
             print(f"[Task {task_id}] Enhancing prompt via LLM...")
             
             if visual_contexts:
+                # Re-rank: Q-series (allaboutITS) naik ke atas untuk konteks RAG dan IP-Adapter
+                visual_contexts = _rerank_q_first(visual_contexts)
+                image_reference = _pick_q_priority_image(visual_contexts)
                 context_parts = []
                 for ctx in visual_contexts:
                     # Membatasi panjang teks konteks RAG maksimal 100 karakter agar tidak melebihi limit token CLIP
@@ -161,24 +264,6 @@ async def async_generate_storyboard(task_id: str, prompt: str, visual_descriptio
                     if ctx['source'] != 'Unknown':
                         context_parts.append(f"(File {ctx['source']}: {truncated_text})")
                         rag_sources.append(ctx['source'])
-                        
-                        # Set image reference for ControlNet/IP-Adapter (ambil yang pertama valid)
-                        if image_reference is None:
-                            base_dir = os.path.dirname(os.path.dirname(__file__))
-                            img_name = ctx['source']
-                            if not (img_name.lower().endswith('.jpg') or img_name.lower().endswith('.png') or img_name.lower().endswith('.jpeg')):
-                                image_candidates = [
-                                    os.path.join(base_dir, "ai", "images", f"{img_name}.jpg"),
-                                    os.path.join(base_dir, "ai", "images", f"{img_name}.png"),
-                                    os.path.join(base_dir, "ai", "images", f"{img_name}.jpeg")
-                                ]
-                            else:
-                                image_candidates = [os.path.join(base_dir, "ai", "images", img_name)]
-                                
-                            for c_path in image_candidates:
-                                if os.path.exists(c_path):
-                                    image_reference = c_path
-                                    break
                     else:
                         context_parts.append(f"({truncated_text})")
                 
@@ -205,17 +290,25 @@ async def async_generate_storyboard(task_id: str, prompt: str, visual_descriptio
             )
             
             print(f"[Task {task_id}] Generation completed successfully!")
+            
+            # Recalculate metrics based on the dynamically generated enhanced_prompt
+            reference_text = f"{prompt} {visual_description or ''} {script_dialogue or ''}".strip()
+            new_nlp_scores = calculate_nlp_scores(reference_text, enhanced_prompt)
+            rag_similarity = calculate_rag_similarity(visual_contexts)
+            
             tasks_db[task_id]["status"] = "completed"
             tasks_db[task_id]["result"] = {
                 "image_url": f"/{output_filename}",
                 "enhanced_prompt": enhanced_prompt,
                 "visual_description": visual_description,
                 "rag_context": visual_contexts,
-                "rag_sources": rag_sources, # Menyimpan metadata visual
+                "rag_sources": rag_sources,
                 "mode_ablasi": not use_rag,
                 "script_dialogue": script_dialogue,
-                "bleu_score": bleu_score,
-                "nlp_scores": nlp_scores
+                "prompt_technique": prompt_technique,
+                "bleu_score": new_nlp_scores["bleu4"],
+                "nlp_scores": new_nlp_scores,
+                "rag_similarity": rag_similarity
             }
             
         except Exception as e:
@@ -235,72 +328,10 @@ class UpscaleRequest(BaseModel):
 async def async_upscale_image(task_id: str):
     try:
         if task_id not in tasks_db:
-             raise ValueError("Original task not found")
+            raise ValueError("Original task not found")
         
         orig_url = tasks_db[task_id]["result"]["image_url"]
-        local_input_path = orig_url.lstrip("/") 
-        local_output_path = f"outputs/upscaled_{task_id}.png"
-        
-        from services.upscale import upscale_image_sync
-        await asyncio.to_thread(upscale_image_sync, local_input_path, local_output_path)
-        
-        tasks_db[task_id]["status"] = "upscaled"
-        tasks_db[task_id]["result"]["upscaled_image_url"] = f"/{local_output_path}"
-        
-    except Exception as e:
-        tasks_db[task_id]["status"] = "upscale_failed"
-        tasks_db[task_id]["result"] = {"error": str(e)}
-
-@app.post("/api/upscale", response_model=TaskStatusResponse)
-async def start_upscale(req: UpscaleRequest, background_tasks: BackgroundTasks):
-    if req.task_id not in tasks_db:
-        raise HTTPException(status_code=404, detail="Task not found")
-        
-    tasks_db[req.task_id]["status"] = "upscaling"
-    background_tasks.add_task(async_upscale_image, req.task_id)
-    return TaskStatusResponse(task_id=req.task_id, status="upscaling")
-
-class UpscaleRequest(BaseModel):
-    task_id: str
-
-async def async_upscale_image(task_id: str):
-    try:
-        if task_id not in tasks_db:
-             raise ValueError("Original task not found")
-        
-        orig_url = tasks_db[task_id]["result"]["image_url"]
-        local_input_path = orig_url.lstrip("/") 
-        local_output_path = f"outputs/upscaled_{task_id}.png"
-        
-        from services.upscale import upscale_image_sync
-        await asyncio.to_thread(upscale_image_sync, local_input_path, local_output_path)
-        
-        tasks_db[task_id]["status"] = "upscaled"
-        tasks_db[task_id]["result"]["upscaled_image_url"] = f"/{local_output_path}"
-        
-    except Exception as e:
-        tasks_db[task_id]["status"] = "upscale_failed"
-        tasks_db[task_id]["result"] = {"error": str(e)}
-
-@app.post("/api/upscale", response_model=TaskStatusResponse)
-async def start_upscale(req: UpscaleRequest, background_tasks: BackgroundTasks):
-    if req.task_id not in tasks_db:
-        raise HTTPException(status_code=404, detail="Task not found")
-        
-    tasks_db[req.task_id]["status"] = "upscaling"
-    background_tasks.add_task(async_upscale_image, req.task_id)
-    return TaskStatusResponse(task_id=req.task_id, status="upscaling")
-
-class UpscaleRequest(BaseModel):
-    task_id: str
-
-async def async_upscale_image(task_id: str):
-    try:
-        if task_id not in tasks_db:
-             raise ValueError("Original task not found")
-        
-        orig_url = tasks_db[task_id]["result"]["image_url"]
-        local_input_path = orig_url.lstrip("/") 
+        local_input_path = orig_url.lstrip("/")
         local_output_path = f"outputs/upscaled_{task_id}.png"
         
         from services.upscale import upscale_image_sync
@@ -318,7 +349,6 @@ async def async_upscale_image(task_id: str):
 async def start_upscale(req: UpscaleRequest, background_tasks: BackgroundTasks):
     if req.task_id not in tasks_db:
         raise HTTPException(status_code=404, detail="Task not found")
-        
     tasks_db[req.task_id]["status"] = "upscaling"
     background_tasks.add_task(async_upscale_image, req.task_id)
     return TaskStatusResponse(task_id=req.task_id, status="upscaling")
@@ -327,7 +357,7 @@ async def start_upscale(req: UpscaleRequest, background_tasks: BackgroundTasks):
 def read_root():
     return {"message": "ITS TV Storyboard API is running. Hardware Profile: RTX 3050 Async Mode."}
 
-async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bool = True, base_model_path: str = None, lora_path: str = None):
+async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bool = True, base_model_path: str = None, lora_path: str = None, prompt_technique: str = "zero-shot"):
     """
     Background Task to handle full automation: Concept -> Script -> Array of Storyboards
     This loops sequentially through each scene, maintaining aggressive VRAM clearing between cycles.
@@ -390,18 +420,22 @@ async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bo
                 
             tasks_db[task_id]["log_stream"].append(f"Frame {idx + 1}: Director AI generating SD Prompt...")
             if visual_contexts:
+                # Re-rank: Q-series (allaboutITS) naik ke atas untuk konteks RAG dan IP-Adapter
+                visual_contexts = _rerank_q_first(visual_contexts)
+                image_reference = _pick_q_priority_image(visual_contexts)
+                tasks_db[task_id]["log_stream"].append(
+                    f"Frame {idx + 1}: IP-Adapter ref → {os.path.basename(image_reference) if image_reference else 'None (no Q-series found)'}"
+                )
                 context_parts = []
                 for ctx in visual_contexts:
                     ctx_text = ctx.get('text', ctx.get('caption', ''))
                     context_parts.append(f"{ctx.get('source', '')} ({ctx_text})")
-                    if not image_reference:
-                        image_reference = os.path.join("ai/images_its", ctx.get('source', ''))
                     rag_sources.append({"source": ctx.get('source', ''), "caption": ctx_text})
                 context_str = ", ".join(context_parts)
             else:
                 context_str = ""
                 
-            enhanced_prompt = await enhance_prompt(prompt, visual_description, context_str)
+            enhanced_prompt = await enhance_prompt(prompt, visual_description, context_str, technique=prompt_technique)
             
             # Wait 3 seconds to let Ollama physically drop its model from VRAM 
             # before initializing PyTorch operations for Stable Diffusion!
@@ -422,8 +456,9 @@ async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bo
                     lora_path=lora_path
                 )
             
-            candidate_text = f"{scene.get('deskripsi_adegan', '')} {scene.get('script', '')}"
-            nlp_scores = calculate_nlp_scores(concept, candidate_text)
+            reference_text = f"{prompt} {visual_description or ''} {script_dialogue or ''}".strip()
+            new_nlp_scores = calculate_nlp_scores(reference_text, enhanced_prompt)
+            rag_similarity = calculate_rag_similarity(visual_contexts)
             frame_result = {
                 "id": f"{task_id}_{idx+1}",
                 "image_url": f"/outputs/{output_filename}",
@@ -440,9 +475,11 @@ async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bo
                 "rag_context": visual_contexts,
                 "rag_sources": rag_sources,
                 "mode_ablasi": not use_rag,
+                "prompt_technique": prompt_technique,
                 "is_generating": False,
-                "bleu_score": nlp_scores["bleu4"],
-                "nlp_scores": nlp_scores
+                "bleu_score": new_nlp_scores["bleu4"],
+                "nlp_scores": new_nlp_scores,
+                "rag_similarity": rag_similarity
             }
             
             # Since this takes 15 mins, we push incremental results!
@@ -499,7 +536,7 @@ async def generate_full_storyboard(req: FullGenerationRequest, background_tasks:
         "result": None
     }
     
-    background_tasks.add_task(async_generate_full_storyboard, task_id, req.concept, req.use_rag, req.base_model_path, req.lora_path)
+    background_tasks.add_task(async_generate_full_storyboard, task_id, req.concept, req.use_rag, req.base_model_path, req.lora_path, req.prompt_technique)
     
     return TaskStatusResponse(task_id=task_id, status="pending")
 
@@ -627,9 +664,9 @@ async def upload_script(file: UploadFile = File(...)):
         except Exception as bleu_err:
             print(f"Failed to calculate optimized NLP scores: {bleu_err}")
             for s in scenes:
-                s["nlp_scores"] = {"bleu1": 0.0, "bleu2": 0.0, "bleu3": 0.0, "bleu4": 0.0, "rougeL": 0.0}
+                s["nlp_scores"] = {"bleu1": 0.0, "bleu2": 0.0, "bleu3": 0.0, "bleu4": 0.0, "rougeL": 0.0, "cosine": 0.0}
                 s["bleu_score"] = 0.0
-            overall_scores = {"bleu1": 0.0, "bleu2": 0.0, "bleu3": 0.0, "bleu4": 0.0, "rougeL": 0.0}
+            overall_scores = {"bleu1": 0.0, "bleu2": 0.0, "bleu3": 0.0, "bleu4": 0.0, "rougeL": 0.0, "cosine": 0.0}
 
         return {"filename": file.filename, "scenes": scenes, "bleu_score": overall_scores["bleu4"], "nlp_scores": overall_scores}
         

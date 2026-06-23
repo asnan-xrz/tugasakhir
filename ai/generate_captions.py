@@ -6,49 +6,52 @@ import re
 import sys
 from PIL import Image
 import io
+import dashscope
+
+dashscope.base_http_api_url = "https://dashscope-intl.aliyuncs.com/api/v1"
 
 image_dir = '/home/firania/Documents/tugasakhir/ai/allaboutITS'
-output_csv = '/home/firania/Documents/tugasakhir/ai/captionITS.csv'
+output_csv = '/home/firania/Documents/tugasakhir/ai/capt_qwen.csv'
 
-# Prompt untuk llava
-prompt = """Deskripsikan gambar-gambar Institut Teknologi Sepuluh Nopember ini secara sangat detail ke dalam 5 kalimat yang berbeda dalam bahasa Indonesia.
-Fokuslah pada elemen-elemen berikut:
-- Teks atau tulisan yang terlihat di dalam gambar.
-- Warna-warna dominan pada objek.
-- Jumlah orang (jika ada).
-- Benda atau objek utama yang ada di dalam gambar.  (Mahasiswa, Rektor, Orang tua Mahasiswa)
-- Suasana atau lokasi.
+# Prompt untuk Qwen2.5-VL
+prompt = """Deskripsikan gambar terkait Institut Teknologi Sepuluh Nopember (ITS) ini SECARA SANGAT DETAIL ke dalam 5 kalimat yang berbeda dalam bahasa Indonesia.
 
-Berikan HANYA 5 kalimat terpisah. Pisahkan masing-masing kalimat dengan baris baru (Enter). 
-JANGAN menambahkan nomor urut. JANGAN menambahkan kata pengantar atau penutup. Langsung 5 kalimat deskripsi. Sertakan kata-kata Institut Teknologi Sepuluh Nopember karena banyak logo """
+Instruksi Detail:
+1. Kalimat pertama: Wajib sebutkan jumlah orang yang terlihat (misal: satu, dua, banyak) beserta jenis kelaminnya (laki-laki/perempuan) atau profesinya.
+2. Kalimat kedua: Jelaskan secara spesifik pakaian/seragam dan atribut yang mereka kenakan (beserta warnanya).
+3. Kalimat ketiga: Deskripsikan aksi, ekspresi, atau aktivitas yang sedang mereka lakukan di gambar tersebut.
+4. Kalimat keempat: Baca dan tuliskan dengan jelas jika ada teks, angka, atau tulisan pada spanduk, logo, maupun objek lainnya.
+5. Kalimat kelima: Gambarkan latar belakang tempatnya (contoh: di dalam kelas, di lahan parkir, taman, dll) serta benda-benda pendukung di sekitarnya.
 
-def encode_image(image_path):
-    with Image.open(image_path) as img:
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-        # Resize maksimal 512x512 agar hemat token dan memori
-        img.thumbnail((512, 512))
-        buffer = io.BytesIO()
-        img.save(buffer, format="JPEG", quality=85)
-        return base64.b64encode(buffer.getvalue()).decode('utf-8')
+ATURAN WAJIB:
+- HANYA outputkan 5 kalimat terpisah (harus merepresentasikan 5 poin di atas secara berurutan).
+- TIDAK BOLEH ada awalan angka (1, 2, 3), bullet point, atau strip (-).
+- TIDAK BOLEH ada teks pengantar seperti 'Berikut adalah deskripsinya...'.
+- Setiap kalimat harus diakhiri dengan tanda titik dan enter."""
 
 def get_captions(image_path):
-    base64_image = encode_image(image_path)
-    url = "http://localhost:11434/api/generate"
-    payload = {
-        "model": "llava",
-        "prompt": prompt,
-        "images": [base64_image],
-        "stream": False,
-        "options": {
-            "temperature": 0.4
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"image": f"file://{os.path.abspath(image_path)}"},
+                {"text": prompt}
+            ]
         }
-    }
+    ]
     try:
-        response = requests.post(url, json=payload)
-        response.raise_for_status()
-        result = response.json()
-        text = result.get('response', '')
+        response = dashscope.MultiModalConversation.call(
+            api_key="sk-ws-H.IYHRDX.dwdU.MEYCIQDzEIzROjbd73EaHeb1HGpxTIekn2JLdaTXlwmEjUASLQIhANIvKDU9kURrm6vX83c3wnAPlEc-hI8MTiPgJhv0AYmI",
+            model='qwen-vl-plus',
+            messages=messages
+        )
+        
+        if response.status_code == 200:
+            content = response.output.choices[0].message.content
+            text = content[0]["text"] if isinstance(content, list) else content
+        else:
+            print(f"API Error: {response.code} - {response.message}")
+            return ["Gagal menghasilkan deskripsi"] * 5
         
         # Bersihkan dan ambil kalimat
         lines = [line.strip() for line in text.split('\n') if line.strip()]
@@ -97,7 +100,7 @@ if not images_to_process:
     print("Semua gambar sudah selesai diproses!")
     sys.exit()
 
-print(f"Memulai proses captioning untuk {len(images_to_process)} gambar sisa (dari total {total} gambar) menggunakan model llava lokal...")
+print(f"Memulai proses captioning untuk {len(images_to_process)} gambar sisa (dari total {total} gambar) menggunakan model qwen3.7-plus...")
 
 mode = 'a' if os.path.exists(output_csv) else 'w'
 with open(output_csv, mode, newline='', encoding='utf-8') as f:

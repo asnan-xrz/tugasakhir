@@ -1,0 +1,375 @@
+NEW
+
+◢◤ 
+
+
+firania@ubuntu // ~/Documents/tugasakhir/ai git:(main) ❯ mv /home/firania/Documents/tugasakhir/ai/lora_output_its /home/firania/Documents/tugasakhir/ai/lora_output_its_old                                                                       [23:49]
+◢◤ 
+
+
+firania@ubuntu // ~/Documents/tugasakhir/ai git:(main) ❯ accelerate launch train_text_to_image_lora.py \
+                                                                                                                       [23:49]
+  --pretrained_model_name_or_path="runwayml/stable-diffusion-v1-5" \
+  --train_data_dir="/home/firania/Documents/tugasakhir/ai/dataset_combined" \
+  --dataloader_num_workers=4 \
+  --resolution=512 \
+  --center_crop \
+  --train_batch_size=1 \
+  --gradient_accumulation_steps=4 \
+  --max_train_steps=5000 \
+  --learning_rate=1e-04 \
+  --max_grad_norm=1 \
+  --lr_scheduler="cosine" \
+  --lr_warmup_steps=0 \
+  --output_dir="/home/firania/Documents/tugasakhir/ai/lora_output_its" \
+  --checkpointing_steps=500 \
+  --validation_prompt="itstvstyle, a photo of Cak Seno mascot ITS standing in front of rectorate building" \
+  --seed=1337 \
+  --mixed_precision="fp16" 2>&1 | tee log_training_lora.txt
+The following values were not passed to `accelerate launch` and had defaults used instead:
+	`--num_processes` was set to a value of `1`
+	`--num_machines` was set to a value of `1`
+	`--mixed_precision` was set to a value of `'no'`
+	`--dynamo_backend` was set to a value of `'no'`
+To avoid this warning pass in values for each of the problematic parameters or run `accelerate config`.
+/home/firania/anaconda3/envs/mozart/lib/python3.10/site-packages/accelerate/accelerator.py:529: UserWarning: `log_with=tensorboard` was passed but no supported trackers are currently installed.
+  warnings.warn(f"`log_with={log_with}` was passed but no supported trackers are currently installed.")
+06/21/2026 23:50:25 - INFO - __main__ - [RANK 0] Distributed environment: NO
+Num processes: 1
+Process index: 0
+Local process index: 0
+Device: cuda
+
+Mixed precision type: fp16
+
+/home/firania/anaconda3/envs/mozart/lib/python3.10/site-packages/huggingface_hub/utils/_validators.py:205: UserWarning: The `local_dir_use_symlinks` argument is deprecated and ignored in `hf_hub_download`. Downloading to a local directory does not use symlinks anymore.
+  warnings.warn(
+06/21/2026 23:50:25 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/scheduler/scheduler_config.json "HTTP/1.1 307 Temporary Redirect"
+06/21/2026 23:50:26 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/scheduler/scheduler_config.json "HTTP/1.1 307 Temporary Redirect"
+06/21/2026 23:50:26 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/stable-diffusion-v1-5/stable-diffusion-v1-5/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/scheduler%2Fscheduler_config.json "HTTP/1.1 200 OK"
+{'timestep_spacing', 'prediction_type', 'variance_type', 'thresholding', 'sample_max_value', 'rescale_betas_zero_snr', 'clip_sample_range', 'dynamic_thresholding_ratio'} was not found in config. Values will be initialized to default values.
+06/21/2026 23:50:26 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/tokenizer/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+06/21/2026 23:50:26 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/tokenizer/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+06/21/2026 23:50:26 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/stable-diffusion-v1-5/stable-diffusion-v1-5/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/tokenizer%2Ftokenizer_config.json "HTTP/1.1 200 OK"
+06/21/2026 23:50:27 - INFO - httpx - HTTP Request: GET https://huggingface.co/api/models/runwayml/stable-diffusion-v1-5/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 307 Temporary Redirect"
+06/21/2026 23:50:27 - INFO - httpx - HTTP Request: GET https://huggingface.co/api/models/stable-diffusion-v1-5/stable-diffusion-v1-5/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+06/21/2026 23:50:27 - INFO - httpx - HTTP Request: GET https://huggingface.co/api/models/runwayml/stable-diffusion-v1-5/tree/main?recursive=true&expand=false "HTTP/1.1 307 Temporary Redirect"
+06/21/2026 23:50:27 - INFO - httpx - HTTP Request: GET https://huggingface.co/api/models/stable-diffusion-v1-5/stable-diffusion-v1-5/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+06/21/2026 23:50:28 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/text_encoder/config.json "HTTP/1.1 307 Temporary Redirect"
+06/21/2026 23:50:28 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/text_encoder/config.json "HTTP/1.1 307 Temporary Redirect"
+06/21/2026 23:50:28 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/stable-diffusion-v1-5/stable-diffusion-v1-5/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/text_encoder%2Fconfig.json "HTTP/1.1 200 OK"
+06/21/2026 23:50:29 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/text_encoder/config.json "HTTP/1.1 307 Temporary Redirect"
+06/21/2026 23:50:29 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/text_encoder/config.json "HTTP/1.1 307 Temporary Redirect"
+06/21/2026 23:50:29 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/stable-diffusion-v1-5/stable-diffusion-v1-5/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/text_encoder%2Fconfig.json "HTTP/1.1 200 OK"
+06/21/2026 23:50:29 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/text_encoder/model.safetensors "HTTP/1.1 307 Temporary Redirect"
+06/21/2026 23:50:30 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/text_encoder/model.safetensors "HTTP/1.1 302 Found"
+Loading weights: 100%|██████████| 196/196 [00:00<00:00, 3984.66it/s]
+06/21/2026 23:50:30 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/vae/config.json "HTTP/1.1 307 Temporary Redirect"
+06/21/2026 23:50:31 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/vae/config.json "HTTP/1.1 307 Temporary Redirect"
+06/21/2026 23:50:31 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/stable-diffusion-v1-5/stable-diffusion-v1-5/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/vae%2Fconfig.json "HTTP/1.1 200 OK"
+06/21/2026 23:50:31 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/vae/diffusion_pytorch_model.safetensors.index.json "HTTP/1.1 307 Temporary Redirect"
+06/21/2026 23:50:31 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/vae/diffusion_pytorch_model.safetensors.index.json "HTTP/1.1 404 Not Found"
+{'scaling_factor', 'latents_std', 'latents_mean', 'mid_block_add_attention', 'force_upcast', 'use_quant_conv', 'use_post_quant_conv', 'shift_factor'} was not found in config. Values will be initialized to default values.
+All model checkpoint weights were used when initializing AutoencoderKL.
+
+All the weights of AutoencoderKL were initialized from the model checkpoint at runwayml/stable-diffusion-v1-5.
+If your task is similar to the task the model of the checkpoint was trained on, you can already use AutoencoderKL for predictions without further training.
+06/21/2026 23:50:32 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/unet/config.json "HTTP/1.1 307 Temporary Redirect"
+06/21/2026 23:50:32 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/unet/config.json "HTTP/1.1 307 Temporary Redirect"
+06/21/2026 23:50:32 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/stable-diffusion-v1-5/stable-diffusion-v1-5/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/unet%2Fconfig.json "HTTP/1.1 200 OK"
+06/21/2026 23:50:32 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/unet/diffusion_pytorch_model.safetensors.index.json "HTTP/1.1 307 Temporary Redirect"
+06/21/2026 23:50:33 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/unet/diffusion_pytorch_model.safetensors.index.json "HTTP/1.1 404 Not Found"
+{'cross_attention_norm', 'mid_block_only_cross_attention', 'mid_block_type', 'transformer_layers_per_block', 'upcast_attention', 'addition_embed_type_num_heads', 'class_embed_type', 'time_embedding_type', 'addition_time_embed_dim', 'time_embedding_dim', 'reverse_transformer_layers_per_block', 'encoder_hid_dim_type', 'resnet_out_scale_factor', 'dropout', 'addition_embed_type', 'conv_out_kernel', 'resnet_time_scale_shift', 'use_linear_projection', 'attention_type', 'resnet_skip_time_act', 'class_embeddings_concat', 'dual_cross_attention', 'only_cross_attention', 'timestep_post_act', 'encoder_hid_dim', 'time_embedding_act_fn', 'projection_class_embeddings_input_dim', 'time_cond_proj_dim', 'conv_in_kernel', 'num_class_embeds', 'num_attention_heads'} was not found in config. Values will be initialized to default values.
+All model checkpoint weights were used when initializing UNet2DConditionModel.
+
+All the weights of UNet2DConditionModel were initialized from the model checkpoint at runwayml/stable-diffusion-v1-5.
+If your task is similar to the task the model of the checkpoint was trained on, you can already use UNet2DConditionModel for predictions without further training.
+06/21/2026 23:50:36 - INFO - httpx - HTTP Request: HEAD https://s3.amazonaws.com/datasets.huggingface.co/datasets/datasets/imagefolder/imagefolder.py "HTTP/1.1 404 Not Found"
+06/21/2026 23:50:37 - INFO - __main__ - [RANK 0] ***** Running training *****
+06/21/2026 23:50:37 - INFO - __main__ - [RANK 0]   Num examples = 3104
+06/21/2026 23:50:37 - INFO - __main__ - [RANK 0]   Num Epochs = 7
+06/21/2026 23:50:37 - INFO - __main__ - [RANK 0]   Instantaneous batch size per device = 1
+06/21/2026 23:50:37 - INFO - __main__ - [RANK 0]   Total train batch size (w. parallel, distributed & accumulation) = 4
+06/21/2026 23:50:37 - INFO - __main__ - [RANK 0]   Gradient Accumulation steps = 4
+06/21/2026 23:50:37 - INFO - __main__ - [RANK 0]   Total optimization steps = 5000
+Steps:  10%|█         | 500/5000 [07:24<1:11:17,  1.05it/s, lr=9.76e-5, step_loss=0.0861]06/21/2026 23:58:01 - INFO - accelerate.accelerator - [RANK 0] Saving current state to /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-500
+Model weights saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-500/pytorch_lora_weights.safetensors
+06/21/2026 23:58:02 - INFO - accelerate.checkpointing - [RANK 0] Optimizer state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-500/optimizer.bin
+06/21/2026 23:58:02 - INFO - accelerate.checkpointing - [RANK 0] Scheduler state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-500/scheduler.bin
+06/21/2026 23:58:02 - INFO - accelerate.checkpointing - [RANK 0] Sampler state for dataloader 0 saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-500/sampler.bin
+06/21/2026 23:58:02 - INFO - accelerate.checkpointing - [RANK 0] Gradient scaler state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-500/scaler.pt
+06/21/2026 23:58:02 - INFO - accelerate.checkpointing - [RANK 0] Random states saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-500/random_states_0.pkl
+06/21/2026 23:58:02 - INFO - __main__ - [RANK 0] Saved state to /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-500
+Steps:  16%|█▌        | 776/5000 [11:38<1:11:23,  1.01s/it, lr=9.42e-5, step_loss=0.0964]06/22/2026 00:02:16 - INFO - httpx - HTTP Request: GET https://huggingface.co/api/models/runwayml/stable-diffusion-v1-5 "HTTP/1.1 307 Temporary Redirect"
+06/22/2026 00:02:16 - INFO - httpx - HTTP Request: GET https://huggingface.co/api/models/stable-diffusion-v1-5/stable-diffusion-v1-5 "HTTP/1.1 200 OK"
+06/22/2026 00:02:17 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/model_index.json "HTTP/1.1 307 Temporary Redirect"
+06/22/2026 00:02:17 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/model_index.json "HTTP/1.1 307 Temporary Redirect"
+06/22/2026 00:02:17 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/stable-diffusion-v1-5/stable-diffusion-v1-5/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/model_index.json "HTTP/1.1 200 OK"
+{'image_encoder', 'requires_safety_checker'} was not found in config. Values will be initialized to default values.
+                                                                     Loaded feature_extractor as CLIPImageProcessor from `feature_extractor` subfolder of runwayml/stable-diffusion-v1-5.
+Loading pipeline components...:   0%|          | 0/7 [00:00<?, ?it/s]        {'timestep_spacing', 'prediction_type'} was not found in config. Values will be initialized to default values.
+Loaded scheduler as PNDMScheduler from `scheduler` subfolder of runwayml/stable-diffusion-v1-5.
+Instantiating AutoencoderKL model under default dtype torch.float16.
+{'scaling_factor', 'latents_std', 'latents_mean', 'mid_block_add_attention', 'force_upcast', 'use_quant_conv', 'use_post_quant_conv', 'shift_factor'} was not found in config. Values will be initialized to default values.
+All model checkpoint weights were used when initializing AutoencoderKL.
+
+All the weights of AutoencoderKL were initialized from the model checkpoint at /home/firania/.cache/huggingface/hub/models--runwayml--stable-diffusion-v1-5/snapshots/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/vae.
+If your task is similar to the task the model of the checkpoint was trained on, you can already use AutoencoderKL for predictions without further training.
+Loaded vae as AutoencoderKL from `vae` subfolder of runwayml/stable-diffusion-v1-5.
+                                                                             Loaded tokenizer as CLIPTokenizer from `tokenizer` subfolder of runwayml/stable-diffusion-v1-5.
+Loading weights: 100%|██████████| 396/396 [00:00<00:00, 402.62it/s] 5.15it/s]
+Loaded safety_checker as StableDiffusionSafetyChecker from `safety_checker` subfolder of runwayml/stable-diffusion-v1-5.
+Loading weights: 100%|██████████| 196/196 [00:00<00:00, 1369.94it/s]
+Loaded text_encoder as CLIPTextModel from `text_encoder` subfolder of runwayml/stable-diffusion-v1-5.
+Loading pipeline components...: 100%|██████████| 7/7 [00:02<00:00,  3.00it/s]
+06/22/2026 00:02:19 - INFO - __main__ - [RANK 0] Running validation... 6it/s]
+ Generating 4 images with prompt: itstvstyle, a photo of Cak Seno mascot ITS standing in front of rectorate building.
+Steps:  20%|██        | 1000/5000 [15:33<1:09:30,  1.04s/it, lr=9.05e-5, step_loss=0.0037]06/22/2026 00:06:11 - INFO - accelerate.accelerator - [RANK 0] Saving current state to /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-1000
+Model weights saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-1000/pytorch_lora_weights.safetensors
+06/22/2026 00:06:11 - INFO - accelerate.checkpointing - [RANK 0] Optimizer state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-1000/optimizer.bin
+06/22/2026 00:06:11 - INFO - accelerate.checkpointing - [RANK 0] Scheduler state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-1000/scheduler.bin
+06/22/2026 00:06:11 - INFO - accelerate.checkpointing - [RANK 0] Sampler state for dataloader 0 saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-1000/sampler.bin
+06/22/2026 00:06:11 - INFO - accelerate.checkpointing - [RANK 0] Gradient scaler state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-1000/scaler.pt
+06/22/2026 00:06:11 - INFO - accelerate.checkpointing - [RANK 0] Random states saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-1000/random_states_0.pkl
+06/22/2026 00:06:11 - INFO - __main__ - [RANK 0] Saved state to /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-1000
+Steps:  30%|███       | 1500/5000 [23:49<52:12,  1.12it/s, lr=7.94e-5, step_loss=0.0318]06/22/2026 00:14:27 - INFO - accelerate.accelerator - [RANK 0] Saving current state to /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-1500
+Model weights saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-1500/pytorch_lora_weights.safetensors
+06/22/2026 00:14:27 - INFO - accelerate.checkpointing - [RANK 0] Optimizer state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-1500/optimizer.bin
+06/22/2026 00:14:27 - INFO - accelerate.checkpointing - [RANK 0] Scheduler state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-1500/scheduler.bin
+06/22/2026 00:14:27 - INFO - accelerate.checkpointing - [RANK 0] Sampler state for dataloader 0 saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-1500/sampler.bin
+06/22/2026 00:14:27 - INFO - accelerate.checkpointing - [RANK 0] Gradient scaler state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-1500/scaler.pt
+06/22/2026 00:14:27 - INFO - accelerate.checkpointing - [RANK 0] Random states saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-1500/random_states_0.pkl
+06/22/2026 00:14:27 - INFO - __main__ - [RANK 0] Saved state to /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-1500
+Steps:  31%|███       | 1552/5000 [24:44<58:00,  1.01s/it, lr=7.81e-5, step_loss=0.158] Couldn't connect to the Hub: [Errno 104] Connection reset by peer.
+Will try to load from local cache.
+{'image_encoder', 'requires_safety_checker'} was not found in config. Values will be initialized to default values.
+                                                                     Loaded feature_extractor as CLIPImageProcessor from `feature_extractor` subfolder of runwayml/stable-diffusion-v1-5.
+{'timestep_spacing', 'prediction_type'} was not found in config. Values will be initialized to default values.
+Loaded scheduler as PNDMScheduler from `scheduler` subfolder of runwayml/stable-diffusion-v1-5.
+Instantiating AutoencoderKL model under default dtype torch.float16.
+{'scaling_factor', 'latents_std', 'latents_mean', 'mid_block_add_attention', 'force_upcast', 'use_quant_conv', 'use_post_quant_conv', 'shift_factor'} was not found in config. Values will be initialized to default values.
+All model checkpoint weights were used when initializing AutoencoderKL.
+
+All the weights of AutoencoderKL were initialized from the model checkpoint at /home/firania/.cache/huggingface/hub/models--runwayml--stable-diffusion-v1-5/snapshots/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/vae.
+If your task is similar to the task the model of the checkpoint was trained on, you can already use AutoencoderKL for predictions without further training.
+Loaded vae as AutoencoderKL from `vae` subfolder of runwayml/stable-diffusion-v1-5.
+                                                                             Loaded tokenizer as CLIPTokenizer from `tokenizer` subfolder of runwayml/stable-diffusion-v1-5.
+Loading weights: 100%|██████████| 396/396 [00:00<00:00, 836.26it/s] 8.43it/s]
+Loaded safety_checker as StableDiffusionSafetyChecker from `safety_checker` subfolder of runwayml/stable-diffusion-v1-5.
+Loading weights: 100%|██████████| 196/196 [00:00<00:00, 905.85it/s] 
+Loaded text_encoder as CLIPTextModel from `text_encoder` subfolder of runwayml/stable-diffusion-v1-5.
+Loading pipeline components...: 100%|██████████| 7/7 [00:01<00:00,  4.23it/s]
+06/22/2026 00:15:26 - INFO - __main__ - [RANK 0] Running validation... 6it/s]
+ Generating 4 images with prompt: itstvstyle, a photo of Cak Seno mascot ITS standing in front of rectorate building.
+Steps:  40%|████      | 2000/5000 [32:20<58:21,  1.17s/it, lr=6.55e-5, step_loss=0.038]06/22/2026 00:22:58 - INFO - accelerate.accelerator - [RANK 0] Saving current state to /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-2000
+Model weights saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-2000/pytorch_lora_weights.safetensors
+06/22/2026 00:22:58 - INFO - accelerate.checkpointing - [RANK 0] Optimizer state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-2000/optimizer.bin
+06/22/2026 00:22:58 - INFO - accelerate.checkpointing - [RANK 0] Scheduler state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-2000/scheduler.bin
+06/22/2026 00:22:58 - INFO - accelerate.checkpointing - [RANK 0] Sampler state for dataloader 0 saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-2000/sampler.bin
+06/22/2026 00:22:58 - INFO - accelerate.checkpointing - [RANK 0] Gradient scaler state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-2000/scaler.pt
+06/22/2026 00:22:58 - INFO - accelerate.checkpointing - [RANK 0] Random states saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-2000/random_states_0.pkl
+06/22/2026 00:22:58 - INFO - __main__ - [RANK 0] Saved state to /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-2000
+Steps:  47%|████▋     | 2328/5000 [37:52<42:17,  1.05it/s, lr=5.54e-5, step_loss=0.0906]06/22/2026 00:28:31 - INFO - httpx - HTTP Request: GET https://huggingface.co/api/models/runwayml/stable-diffusion-v1-5 "HTTP/1.1 307 Temporary Redirect"
+06/22/2026 00:28:31 - INFO - httpx - HTTP Request: GET https://huggingface.co/api/models/stable-diffusion-v1-5/stable-diffusion-v1-5 "HTTP/1.1 200 OK"
+06/22/2026 00:28:31 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/model_index.json "HTTP/1.1 307 Temporary Redirect"
+06/22/2026 00:28:32 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/model_index.json "HTTP/1.1 307 Temporary Redirect"
+06/22/2026 00:28:32 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/stable-diffusion-v1-5/stable-diffusion-v1-5/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/model_index.json "HTTP/1.1 200 OK"
+{'image_encoder', 'requires_safety_checker'} was not found in config. Values will be initialized to default values.
+                                                                     Loaded feature_extractor as CLIPImageProcessor from `feature_extractor` subfolder of runwayml/stable-diffusion-v1-5.
+{'timestep_spacing', 'prediction_type'} was not found in config. Values will be initialized to default values.
+Loaded scheduler as PNDMScheduler from `scheduler` subfolder of runwayml/stable-diffusion-v1-5.
+Instantiating AutoencoderKL model under default dtype torch.float16.
+{'scaling_factor', 'latents_std', 'latents_mean', 'mid_block_add_attention', 'force_upcast', 'use_quant_conv', 'use_post_quant_conv', 'shift_factor'} was not found in config. Values will be initialized to default values.
+All model checkpoint weights were used when initializing AutoencoderKL.
+
+All the weights of AutoencoderKL were initialized from the model checkpoint at /home/firania/.cache/huggingface/hub/models--runwayml--stable-diffusion-v1-5/snapshots/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/vae.
+If your task is similar to the task the model of the checkpoint was trained on, you can already use AutoencoderKL for predictions without further training.
+Loaded vae as AutoencoderKL from `vae` subfolder of runwayml/stable-diffusion-v1-5.
+                                                                             Loaded tokenizer as CLIPTokenizer from `tokenizer` subfolder of runwayml/stable-diffusion-v1-5.
+Loading weights: 100%|██████████| 396/396 [00:00<00:00, 844.26it/s] 8.81it/s]
+Loaded safety_checker as StableDiffusionSafetyChecker from `safety_checker` subfolder of runwayml/stable-diffusion-v1-5.
+Loading weights: 100%|██████████| 196/196 [00:00<00:00, 871.29it/s] 
+Loaded text_encoder as CLIPTextModel from `text_encoder` subfolder of runwayml/stable-diffusion-v1-5.
+Loading pipeline components...: 100%|██████████| 7/7 [00:02<00:00,  3.05it/s]
+06/22/2026 00:28:34 - INFO - __main__ - [RANK 0] Running validation... 7it/s]
+ Generating 4 images with prompt: itstvstyle, a photo of Cak Seno mascot ITS standing in front of rectorate building.
+Steps:  50%|█████     | 2500/5000 [40:57<36:01,  1.16it/s, lr=5e-5, step_loss=0.444]06/22/2026 00:31:35 - INFO - accelerate.accelerator - [RANK 0] Saving current state to /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-2500
+Model weights saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-2500/pytorch_lora_weights.safetensors
+06/22/2026 00:31:35 - INFO - accelerate.checkpointing - [RANK 0] Optimizer state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-2500/optimizer.bin
+06/22/2026 00:31:35 - INFO - accelerate.checkpointing - [RANK 0] Scheduler state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-2500/scheduler.bin
+06/22/2026 00:31:35 - INFO - accelerate.checkpointing - [RANK 0] Sampler state for dataloader 0 saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-2500/sampler.bin
+06/22/2026 00:31:35 - INFO - accelerate.checkpointing - [RANK 0] Gradient scaler state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-2500/scaler.pt
+06/22/2026 00:31:35 - INFO - accelerate.checkpointing - [RANK 0] Random states saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-2500/random_states_0.pkl
+06/22/2026 00:31:35 - INFO - __main__ - [RANK 0] Saved state to /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-2500
+Steps:  60%|██████    | 3000/5000 [49:12<34:24,  1.03s/it, lr=3.46e-5, step_loss=0.136]06/22/2026 00:39:50 - INFO - accelerate.accelerator - [RANK 0] Saving current state to /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-3000
+Model weights saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-3000/pytorch_lora_weights.safetensors
+06/22/2026 00:39:50 - INFO - accelerate.checkpointing - [RANK 0] Optimizer state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-3000/optimizer.bin
+06/22/2026 00:39:50 - INFO - accelerate.checkpointing - [RANK 0] Scheduler state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-3000/scheduler.bin
+06/22/2026 00:39:50 - INFO - accelerate.checkpointing - [RANK 0] Sampler state for dataloader 0 saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-3000/sampler.bin
+06/22/2026 00:39:50 - INFO - accelerate.checkpointing - [RANK 0] Gradient scaler state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-3000/scaler.pt
+06/22/2026 00:39:50 - INFO - accelerate.checkpointing - [RANK 0] Random states saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-3000/random_states_0.pkl
+06/22/2026 00:39:50 - INFO - __main__ - [RANK 0] Saved state to /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-3000
+Steps:  62%|██████▏   | 3104/5000 [50:58<28:55,  1.09it/s, lr=3.15e-5, step_loss=0.489]06/22/2026 00:41:36 - INFO - httpx - HTTP Request: GET https://huggingface.co/api/models/runwayml/stable-diffusion-v1-5 "HTTP/1.1 307 Temporary Redirect"
+06/22/2026 00:41:36 - INFO - httpx - HTTP Request: GET https://huggingface.co/api/models/stable-diffusion-v1-5/stable-diffusion-v1-5 "HTTP/1.1 200 OK"
+06/22/2026 00:41:37 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/model_index.json "HTTP/1.1 307 Temporary Redirect"
+06/22/2026 00:41:37 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/model_index.json "HTTP/1.1 307 Temporary Redirect"
+06/22/2026 00:41:37 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/stable-diffusion-v1-5/stable-diffusion-v1-5/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/model_index.json "HTTP/1.1 200 OK"
+{'image_encoder', 'requires_safety_checker'} was not found in config. Values will be initialized to default values.
+                                                                     Loaded feature_extractor as CLIPImageProcessor from `feature_extractor` subfolder of runwayml/stable-diffusion-v1-5.
+{'timestep_spacing', 'prediction_type'} was not found in config. Values will be initialized to default values.
+Loaded scheduler as PNDMScheduler from `scheduler` subfolder of runwayml/stable-diffusion-v1-5.
+Instantiating AutoencoderKL model under default dtype torch.float16.
+{'scaling_factor', 'latents_std', 'latents_mean', 'mid_block_add_attention', 'force_upcast', 'use_quant_conv', 'use_post_quant_conv', 'shift_factor'} was not found in config. Values will be initialized to default values.
+All model checkpoint weights were used when initializing AutoencoderKL.
+
+All the weights of AutoencoderKL were initialized from the model checkpoint at /home/firania/.cache/huggingface/hub/models--runwayml--stable-diffusion-v1-5/snapshots/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/vae.
+If your task is similar to the task the model of the checkpoint was trained on, you can already use AutoencoderKL for predictions without further training.
+Loaded vae as AutoencoderKL from `vae` subfolder of runwayml/stable-diffusion-v1-5.
+                                                                             Loaded tokenizer as CLIPTokenizer from `tokenizer` subfolder of runwayml/stable-diffusion-v1-5.
+Loading weights: 100%|██████████| 396/396 [00:00<00:00, 803.51it/s] 9.11it/s]
+Loaded safety_checker as StableDiffusionSafetyChecker from `safety_checker` subfolder of runwayml/stable-diffusion-v1-5.
+Loading weights: 100%|██████████| 196/196 [00:00<00:00, 909.44it/s] 
+Loaded text_encoder as CLIPTextModel from `text_encoder` subfolder of runwayml/stable-diffusion-v1-5.
+Loading pipeline components...: 100%|██████████| 7/7 [00:02<00:00,  3.42it/s]
+06/22/2026 00:41:39 - INFO - __main__ - [RANK 0] Running validation... 2it/s]
+ Generating 4 images with prompt: itstvstyle, a photo of Cak Seno mascot ITS standing in front of rectorate building.
+Steps:  70%|███████   | 3500/5000 [57:54<25:25,  1.02s/it, lr=2.06e-5, step_loss=0.274]06/22/2026 00:48:32 - INFO - accelerate.accelerator - [RANK 0] Saving current state to /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-3500
+Model weights saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-3500/pytorch_lora_weights.safetensors
+06/22/2026 00:48:32 - INFO - accelerate.checkpointing - [RANK 0] Optimizer state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-3500/optimizer.bin
+06/22/2026 00:48:32 - INFO - accelerate.checkpointing - [RANK 0] Scheduler state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-3500/scheduler.bin
+06/22/2026 00:48:32 - INFO - accelerate.checkpointing - [RANK 0] Sampler state for dataloader 0 saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-3500/sampler.bin
+06/22/2026 00:48:32 - INFO - accelerate.checkpointing - [RANK 0] Gradient scaler state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-3500/scaler.pt
+06/22/2026 00:48:32 - INFO - accelerate.checkpointing - [RANK 0] Random states saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-3500/random_states_0.pkl
+06/22/2026 00:48:32 - INFO - __main__ - [RANK 0] Saved state to /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-3500
+Steps:  78%|███████▊  | 3880/5000 [1:04:17<20:59,  1.12s/it, lr=1.19e-5, step_loss=0.0267]06/22/2026 00:54:55 - INFO - httpx - HTTP Request: GET https://huggingface.co/api/models/runwayml/stable-diffusion-v1-5 "HTTP/1.1 307 Temporary Redirect"
+06/22/2026 00:54:56 - INFO - httpx - HTTP Request: GET https://huggingface.co/api/models/stable-diffusion-v1-5/stable-diffusion-v1-5 "HTTP/1.1 200 OK"
+06/22/2026 00:54:56 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/model_index.json "HTTP/1.1 307 Temporary Redirect"
+06/22/2026 00:54:56 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/model_index.json "HTTP/1.1 307 Temporary Redirect"
+06/22/2026 00:54:56 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/stable-diffusion-v1-5/stable-diffusion-v1-5/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/model_index.json "HTTP/1.1 200 OK"
+{'image_encoder', 'requires_safety_checker'} was not found in config. Values will be initialized to default values.
+                                                                     Loaded feature_extractor as CLIPImageProcessor from `feature_extractor` subfolder of runwayml/stable-diffusion-v1-5.
+{'timestep_spacing', 'prediction_type'} was not found in config. Values will be initialized to default values.
+Loaded scheduler as PNDMScheduler from `scheduler` subfolder of runwayml/stable-diffusion-v1-5.
+Instantiating AutoencoderKL model under default dtype torch.float16.
+{'scaling_factor', 'latents_std', 'latents_mean', 'mid_block_add_attention', 'force_upcast', 'use_quant_conv', 'use_post_quant_conv', 'shift_factor'} was not found in config. Values will be initialized to default values.
+All model checkpoint weights were used when initializing AutoencoderKL.
+
+All the weights of AutoencoderKL were initialized from the model checkpoint at /home/firania/.cache/huggingface/hub/models--runwayml--stable-diffusion-v1-5/snapshots/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/vae.
+If your task is similar to the task the model of the checkpoint was trained on, you can already use AutoencoderKL for predictions without further training.
+Loaded vae as AutoencoderKL from `vae` subfolder of runwayml/stable-diffusion-v1-5.
+                                                                             Loaded tokenizer as CLIPTokenizer from `tokenizer` subfolder of runwayml/stable-diffusion-v1-5.
+Loading weights: 100%|██████████| 396/396 [00:00<00:00, 775.37it/s] 7.41it/s]
+Loaded safety_checker as StableDiffusionSafetyChecker from `safety_checker` subfolder of runwayml/stable-diffusion-v1-5.
+Loading weights: 100%|██████████| 196/196 [00:00<00:00, 1127.45it/s]
+Loaded text_encoder as CLIPTextModel from `text_encoder` subfolder of runwayml/stable-diffusion-v1-5.
+Loading pipeline components...: 100%|██████████| 7/7 [00:01<00:00,  3.55it/s]
+06/22/2026 00:54:58 - INFO - __main__ - [RANK 0] Running validation... 7it/s]
+ Generating 4 images with prompt: itstvstyle, a photo of Cak Seno mascot ITS standing in front of rectorate building.
+Steps:  80%|████████  | 4000/5000 [1:06:38<17:14,  1.03s/it, lr=9.57e-6, step_loss=0.456]06/22/2026 00:57:15 - INFO - accelerate.accelerator - [RANK 0] Saving current state to /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-4000
+Model weights saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-4000/pytorch_lora_weights.safetensors
+06/22/2026 00:57:15 - INFO - accelerate.checkpointing - [RANK 0] Optimizer state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-4000/optimizer.bin
+06/22/2026 00:57:15 - INFO - accelerate.checkpointing - [RANK 0] Scheduler state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-4000/scheduler.bin
+06/22/2026 00:57:15 - INFO - accelerate.checkpointing - [RANK 0] Sampler state for dataloader 0 saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-4000/sampler.bin
+06/22/2026 00:57:15 - INFO - accelerate.checkpointing - [RANK 0] Gradient scaler state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-4000/scaler.pt
+06/22/2026 00:57:15 - INFO - accelerate.checkpointing - [RANK 0] Random states saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-4000/random_states_0.pkl
+06/22/2026 00:57:15 - INFO - __main__ - [RANK 0] Saved state to /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-4000
+Steps:  90%|█████████ | 4500/5000 [1:14:57<09:00,  1.08s/it, lr=2.46e-6, step_loss=0.00699]06/22/2026 01:05:35 - INFO - accelerate.accelerator - [RANK 0] Saving current state to /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-4500
+Model weights saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-4500/pytorch_lora_weights.safetensors
+06/22/2026 01:05:35 - INFO - accelerate.checkpointing - [RANK 0] Optimizer state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-4500/optimizer.bin
+06/22/2026 01:05:35 - INFO - accelerate.checkpointing - [RANK 0] Scheduler state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-4500/scheduler.bin
+06/22/2026 01:05:35 - INFO - accelerate.checkpointing - [RANK 0] Sampler state for dataloader 0 saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-4500/sampler.bin
+06/22/2026 01:05:35 - INFO - accelerate.checkpointing - [RANK 0] Gradient scaler state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-4500/scaler.pt
+06/22/2026 01:05:35 - INFO - accelerate.checkpointing - [RANK 0] Random states saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-4500/random_states_0.pkl
+06/22/2026 01:05:35 - INFO - __main__ - [RANK 0] Saved state to /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-4500
+Steps:  93%|█████████▎| 4656/5000 [1:17:27<06:05,  1.06s/it, lr=1.16e-6, step_loss=0.243]06/22/2026 01:08:05 - INFO - httpx - HTTP Request: GET https://huggingface.co/api/models/runwayml/stable-diffusion-v1-5 "HTTP/1.1 307 Temporary Redirect"
+06/22/2026 01:08:06 - INFO - httpx - HTTP Request: GET https://huggingface.co/api/models/stable-diffusion-v1-5/stable-diffusion-v1-5 "HTTP/1.1 200 OK"
+06/22/2026 01:08:06 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/model_index.json "HTTP/1.1 307 Temporary Redirect"
+06/22/2026 01:08:06 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/model_index.json "HTTP/1.1 307 Temporary Redirect"
+06/22/2026 01:08:06 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/stable-diffusion-v1-5/stable-diffusion-v1-5/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/model_index.json "HTTP/1.1 200 OK"
+{'image_encoder', 'requires_safety_checker'} was not found in config. Values will be initialized to default values.
+                                                                     Loaded feature_extractor as CLIPImageProcessor from `feature_extractor` subfolder of runwayml/stable-diffusion-v1-5.
+{'timestep_spacing', 'prediction_type'} was not found in config. Values will be initialized to default values.
+Loaded scheduler as PNDMScheduler from `scheduler` subfolder of runwayml/stable-diffusion-v1-5.
+Instantiating AutoencoderKL model under default dtype torch.float16.
+{'scaling_factor', 'latents_std', 'latents_mean', 'mid_block_add_attention', 'force_upcast', 'use_quant_conv', 'use_post_quant_conv', 'shift_factor'} was not found in config. Values will be initialized to default values.
+All model checkpoint weights were used when initializing AutoencoderKL.
+
+All the weights of AutoencoderKL were initialized from the model checkpoint at /home/firania/.cache/huggingface/hub/models--runwayml--stable-diffusion-v1-5/snapshots/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/vae.
+If your task is similar to the task the model of the checkpoint was trained on, you can already use AutoencoderKL for predictions without further training.
+Loaded vae as AutoencoderKL from `vae` subfolder of runwayml/stable-diffusion-v1-5.
+                                                                             Loaded tokenizer as CLIPTokenizer from `tokenizer` subfolder of runwayml/stable-diffusion-v1-5.
+Loading weights: 100%|██████████| 396/396 [00:00<00:00, 945.06it/s] 8.71it/s]
+Loaded safety_checker as StableDiffusionSafetyChecker from `safety_checker` subfolder of runwayml/stable-diffusion-v1-5.
+Loading weights: 100%|██████████| 196/196 [00:00<00:00, 930.83it/s] 
+Loaded text_encoder as CLIPTextModel from `text_encoder` subfolder of runwayml/stable-diffusion-v1-5.
+Loading pipeline components...: 100%|██████████| 7/7 [00:01<00:00,  4.37it/s]
+06/22/2026 01:08:08 - INFO - __main__ - [RANK 0] Running validation... 0it/s]
+ Generating 4 images with prompt: itstvstyle, a photo of Cak Seno mascot ITS standing in front of rectorate building.
+Steps: 100%|██████████| 5000/5000 [1:23:25<00:00,  1.08it/s, lr=9.87e-12, step_loss=0.343]06/22/2026 01:14:02 - INFO - accelerate.accelerator - [RANK 0] Saving current state to /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-5000
+Model weights saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-5000/pytorch_lora_weights.safetensors
+06/22/2026 01:14:02 - INFO - accelerate.checkpointing - [RANK 0] Optimizer state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-5000/optimizer.bin
+06/22/2026 01:14:02 - INFO - accelerate.checkpointing - [RANK 0] Scheduler state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-5000/scheduler.bin
+06/22/2026 01:14:02 - INFO - accelerate.checkpointing - [RANK 0] Sampler state for dataloader 0 saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-5000/sampler.bin
+06/22/2026 01:14:02 - INFO - accelerate.checkpointing - [RANK 0] Gradient scaler state saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-5000/scaler.pt
+06/22/2026 01:14:02 - INFO - accelerate.checkpointing - [RANK 0] Random states saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-5000/random_states_0.pkl
+06/22/2026 01:14:02 - INFO - __main__ - [RANK 0] Saved state to /home/firania/Documents/tugasakhir/ai/lora_output_its/checkpoint-5000
+Steps: 100%|██████████| 5000/5000 [1:23:25<00:00,  1.08it/s, lr=0, step_loss=0.238]       06/22/2026 01:14:03 - INFO - httpx - HTTP Request: GET https://huggingface.co/api/models/runwayml/stable-diffusion-v1-5 "HTTP/1.1 307 Temporary Redirect"
+06/22/2026 01:14:04 - INFO - httpx - HTTP Request: GET https://huggingface.co/api/models/stable-diffusion-v1-5/stable-diffusion-v1-5 "HTTP/1.1 200 OK"
+06/22/2026 01:14:04 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/model_index.json "HTTP/1.1 307 Temporary Redirect"
+06/22/2026 01:14:04 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/model_index.json "HTTP/1.1 307 Temporary Redirect"
+06/22/2026 01:14:04 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/stable-diffusion-v1-5/stable-diffusion-v1-5/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/model_index.json "HTTP/1.1 200 OK"
+{'image_encoder', 'requires_safety_checker'} was not found in config. Values will be initialized to default values.
+                                                                     Loaded feature_extractor as CLIPImageProcessor from `feature_extractor` subfolder of runwayml/stable-diffusion-v1-5.
+{'timestep_spacing', 'prediction_type'} was not found in config. Values will be initialized to default values.
+Loaded scheduler as PNDMScheduler from `scheduler` subfolder of runwayml/stable-diffusion-v1-5.
+Instantiating AutoencoderKL model under default dtype torch.float16.
+{'scaling_factor', 'latents_std', 'latents_mean', 'mid_block_add_attention', 'force_upcast', 'use_quant_conv', 'use_post_quant_conv', 'shift_factor'} was not found in config. Values will be initialized to default values.
+All model checkpoint weights were used when initializing AutoencoderKL.
+
+All the weights of AutoencoderKL were initialized from the model checkpoint at /home/firania/.cache/huggingface/hub/models--runwayml--stable-diffusion-v1-5/snapshots/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/vae.
+If your task is similar to the task the model of the checkpoint was trained on, you can already use AutoencoderKL for predictions without further training.
+Loaded vae as AutoencoderKL from `vae` subfolder of runwayml/stable-diffusion-v1-5.
+                                                                             Loaded tokenizer as CLIPTokenizer from `tokenizer` subfolder of runwayml/stable-diffusion-v1-5.
+Loading weights: 100%|██████████| 396/396 [00:00<00:00, 835.87it/s] 7.92it/s]
+Loaded safety_checker as StableDiffusionSafetyChecker from `safety_checker` subfolder of runwayml/stable-diffusion-v1-5.
+Loading weights: 100%|██████████| 196/196 [00:00<00:00, 1839.64it/s]
+Loaded text_encoder as CLIPTextModel from `text_encoder` subfolder of runwayml/stable-diffusion-v1-5.
+Loading pipeline components...: 100%|██████████| 7/7 [00:01<00:00,  3.95it/s]
+06/22/2026 01:14:06 - INFO - __main__ - [RANK 0] Running validation... 9it/s]
+ Generating 4 images with prompt: itstvstyle, a photo of Cak Seno mascot ITS standing in front of rectorate building.
+Model weights saved in /home/firania/Documents/tugasakhir/ai/lora_output_its/pytorch_lora_weights.safetensors
+06/22/2026 01:14:20 - INFO - httpx - HTTP Request: GET https://huggingface.co/api/models/runwayml/stable-diffusion-v1-5 "HTTP/1.1 307 Temporary Redirect"
+06/22/2026 01:14:20 - INFO - httpx - HTTP Request: GET https://huggingface.co/api/models/stable-diffusion-v1-5/stable-diffusion-v1-5 "HTTP/1.1 200 OK"
+06/22/2026 01:14:20 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/model_index.json "HTTP/1.1 307 Temporary Redirect"
+06/22/2026 01:14:21 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/model_index.json "HTTP/1.1 307 Temporary Redirect"
+06/22/2026 01:14:21 - INFO - httpx - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/stable-diffusion-v1-5/stable-diffusion-v1-5/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/model_index.json "HTTP/1.1 200 OK"
+{'image_encoder', 'requires_safety_checker'} was not found in config. Values will be initialized to default values.
+                                                                     Loaded feature_extractor as CLIPImageProcessor from `feature_extractor` subfolder of runwayml/stable-diffusion-v1-5.
+{'timestep_spacing', 'prediction_type'} was not found in config. Values will be initialized to default values.
+Loaded scheduler as PNDMScheduler from `scheduler` subfolder of runwayml/stable-diffusion-v1-5.
+Instantiating AutoencoderKL model under default dtype torch.float16.
+{'scaling_factor', 'latents_std', 'latents_mean', 'mid_block_add_attention', 'force_upcast', 'use_quant_conv', 'use_post_quant_conv', 'shift_factor'} was not found in config. Values will be initialized to default values.
+All model checkpoint weights were used when initializing AutoencoderKL.
+
+All the weights of AutoencoderKL were initialized from the model checkpoint at /home/firania/.cache/huggingface/hub/models--runwayml--stable-diffusion-v1-5/snapshots/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/vae.
+If your task is similar to the task the model of the checkpoint was trained on, you can already use AutoencoderKL for predictions without further training.
+Loaded vae as AutoencoderKL from `vae` subfolder of runwayml/stable-diffusion-v1-5.
+                                                                             Instantiating UNet2DConditionModel model under default dtype torch.float16.
+{'cross_attention_norm', 'mid_block_only_cross_attention', 'mid_block_type', 'transformer_layers_per_block', 'upcast_attention', 'addition_embed_type_num_heads', 'class_embed_type', 'time_embedding_type', 'addition_time_embed_dim', 'time_embedding_dim', 'reverse_transformer_layers_per_block', 'encoder_hid_dim_type', 'resnet_out_scale_factor', 'dropout', 'addition_embed_type', 'conv_out_kernel', 'resnet_time_scale_shift', 'use_linear_projection', 'attention_type', 'resnet_skip_time_act', 'class_embeddings_concat', 'dual_cross_attention', 'only_cross_attention', 'timestep_post_act', 'encoder_hid_dim', 'time_embedding_act_fn', 'projection_class_embeddings_input_dim', 'time_cond_proj_dim', 'conv_in_kernel', 'num_class_embeds', 'num_attention_heads'} was not found in config. Values will be initialized to default values.
+All model checkpoint weights were used when initializing UNet2DConditionModel.
+
+All the weights of UNet2DConditionModel were initialized from the model checkpoint at /home/firania/.cache/huggingface/hub/models--runwayml--stable-diffusion-v1-5/snapshots/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/unet.
+If your task is similar to the task the model of the checkpoint was trained on, you can already use UNet2DConditionModel for predictions without further training.
+Loaded unet as UNet2DConditionModel from `unet` subfolder of runwayml/stable-diffusion-v1-5.
+                                                                             Loaded tokenizer as CLIPTokenizer from `tokenizer` subfolder of runwayml/stable-diffusion-v1-5.
+Loading weights: 100%|██████████| 396/396 [00:00<00:00, 846.56it/s] 1.14it/s]
+Loaded safety_checker as StableDiffusionSafetyChecker from `safety_checker` subfolder of runwayml/stable-diffusion-v1-5.
+Loading weights: 100%|██████████| 196/196 [00:00<00:00, 832.24it/s] 
+Loaded text_encoder as CLIPTextModel from `text_encoder` subfolder of runwayml/stable-diffusion-v1-5.
+Loading pipeline components...: 100%|██████████| 7/7 [00:04<00:00,  1.60it/s]
+Loading unet.ine components...: 100%|██████████| 7/7 [00:04<00:00,  1.54it/s]
+No LoRA keys associated to CLIPTextModel found with the prefix='text_encoder'. This is safe to ignore if LoRA state dict didn't originally have any CLIPTextModel related params. You can also try specifying `prefix=None` to resolve the warning. Otherwise, open an issue if you think it's unexpected: https://github.com/huggingface/diffusers/issues/new
+06/22/2026 01:14:25 - INFO - __main__ - [RANK 0] Running validation... 
+ Generating 4 images with prompt: itstvstyle, a photo of Cak Seno mascot ITS standing in front of rectorate building.
+Steps: 100%|██████████| 5000/5000 [1:24:01<00:00,  1.01s/it, lr=0, step_loss=0.238]
+◢◤ 
