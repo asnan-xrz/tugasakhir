@@ -153,6 +153,7 @@ class GenerationRequest(BaseModel):
     bleu_score: Optional[float] = None
     nlp_scores: Optional[Dict[str, float]] = None
     prompt_technique: str = "zero-shot"
+    use_controlnet: bool = True
 
 class FullGenerationRequest(BaseModel):
     concept: str
@@ -160,6 +161,7 @@ class FullGenerationRequest(BaseModel):
     base_model_path: Optional[str] = None
     lora_path: Optional[str] = None
     prompt_technique: str = "zero-shot"
+    use_controlnet: bool = True
 
 class ModelSyncRequest(BaseModel):
     base_model_id: Optional[str] = "128713" # Placeholder ID for Storyboard Sketch
@@ -231,7 +233,7 @@ def _rerank_q_first(visual_contexts: list) -> list:
         print(f"[RAG Re-rank] {len(q_items)} Q-series naik ke atas dari total {len(visual_contexts)} konteks.")
     return reranked
 
-async def async_generate_storyboard(task_id: str, prompt: str, visual_description: str = None, use_rag: bool = True, script_dialogue: str = None, base_model_path: str = None, lora_path: str = None, bleu_score: float = None, nlp_scores: dict = None, prompt_technique: str = "zero-shot"):
+async def async_generate_storyboard(task_id: str, prompt: str, visual_description: str = None, use_rag: bool = True, script_dialogue: str = None, base_model_path: str = None, lora_path: str = None, bleu_score: float = None, nlp_scores: dict = None, prompt_technique: str = "zero-shot", use_controlnet: bool = True):
     """
     Background Task to handle text-to-image generation asynchronously inside a GPU queue.
     """
@@ -244,7 +246,8 @@ async def async_generate_storyboard(task_id: str, prompt: str, visual_descriptio
             if use_rag:
                 print(f"[Task {task_id}] Fetching visual context via RAG...")
                 tasks_db[task_id]["status"] = "rag_search"
-                visual_contexts = await get_visual_context(prompt)
+                rag_query = f"{prompt} {visual_description}" if visual_description else prompt
+                visual_contexts = await get_visual_context(rag_query)
             else:
                 print(f"[Task {task_id}] Ablation Mode: Skipping RAG...")
                 tasks_db[task_id]["status"] = "skip_rag"
@@ -255,9 +258,11 @@ async def async_generate_storyboard(task_id: str, prompt: str, visual_descriptio
             if visual_contexts:
                 # Re-rank: Q-series (allaboutITS) naik ke atas untuk konteks RAG dan IP-Adapter
                 visual_contexts = _rerank_q_first(visual_contexts)
+                # Pilih gambar referensi dari seluruh pool 15 konteks
                 image_reference = _pick_q_priority_image(visual_contexts)
                 context_parts = []
-                for ctx in visual_contexts:
+                # HANYA gunakan 3 konteks teks terbaik untuk LLM agar tidak OOM token
+                for ctx in visual_contexts[:3]:
                     # Membatasi panjang teks konteks RAG maksimal 100 karakter agar tidak melebihi limit token CLIP
                     truncated_text = ctx['text'][:100] + ("..." if len(ctx['text']) > 100 else "")
                     
@@ -286,7 +291,8 @@ async def async_generate_storyboard(task_id: str, prompt: str, visual_descriptio
                 output_path=output_filename, 
                 image_reference=image_reference,
                 base_model_path=base_model_path,
-                lora_path=lora_path
+                lora_path=lora_path,
+                use_controlnet=use_controlnet
             )
             
             print(f"[Task {task_id}] Generation completed successfully!")
@@ -357,9 +363,10 @@ async def start_upscale(req: UpscaleRequest, background_tasks: BackgroundTasks):
 def read_root():
     return {"message": "ITS TV Storyboard API is running. Hardware Profile: RTX 3050 Async Mode."}
 
-async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bool = True, base_model_path: str = None, lora_path: str = None, prompt_technique: str = "zero-shot"):
+async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bool = True, base_model_path: str = None, lora_path: str = None, prompt_technique: str = "zero-shot", use_controlnet: bool = True):
     """
-    Background Task to handle full automation: Concept -> Script -> Array of Storyboards
+    Background Task for Full Automation.
+    Orchestrates Scene Generation -> Sub-task creation for each frame.
     This loops sequentially through each scene, maintaining aggressive VRAM clearing between cycles.
     Tracks state incrementally via log_stream and result_scenes arrays so frontend can print progressively.
     """
@@ -413,7 +420,9 @@ async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bo
             image_reference = None
             if use_rag:
                 tasks_db[task_id]["log_stream"].append(f"Frame {idx + 1}: Searching Context for Background Assets (RAG)...")
-                visual_contexts = await get_visual_context(prompt)
+                # Gabungkan concept utama dari user agar keyword spesifik (seperti 'boneka seno') tertangkap kuat oleh RAG
+                rag_query = f"{concept} {scene.get('deskripsi_adegan', '')} {visual_description}"
+                visual_contexts = await get_visual_context(rag_query)
             else:
                 tasks_db[task_id]["log_stream"].append(f"Frame {idx + 1}: Ablation Mode: Skipping RAG...")
                 visual_contexts = None
@@ -427,7 +436,7 @@ async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bo
                     f"Frame {idx + 1}: IP-Adapter ref → {os.path.basename(image_reference) if image_reference else 'None (no Q-series found)'}"
                 )
                 context_parts = []
-                for ctx in visual_contexts:
+                for ctx in visual_contexts[:3]:
                     ctx_text = ctx.get('text', ctx.get('caption', ''))
                     context_parts.append(f"{ctx.get('source', '')} ({ctx_text})")
                     rag_sources.append({"source": ctx.get('source', ''), "caption": ctx_text})
@@ -453,7 +462,8 @@ async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bo
                     output_path=output_path,
                     image_reference=image_reference,
                     base_model_path=base_model_path,
-                    lora_path=lora_path
+                    lora_path=lora_path,
+                    use_controlnet=use_controlnet
                 )
             
             reference_text = f"{prompt} {visual_description or ''} {script_dialogue or ''}".strip()
@@ -511,7 +521,7 @@ async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bo
         tasks_db[task_id]["log_stream"].append(f"CRITICAL ERROR: {str(e)}")
 
 @app.post("/api/generate", response_model=TaskStatusResponse)
-async def start_generation(req: GenerationRequest, background_tasks: BackgroundTasks):
+async def start_generation(request: GenerationRequest, background_tasks: BackgroundTasks):
     """
     Endpoint to receive generation prompt. Starts a background task and returns a task_id immediately.
     """
@@ -519,12 +529,25 @@ async def start_generation(req: GenerationRequest, background_tasks: BackgroundT
     tasks_db[task_id] = {"status": "pending", "result": None}
     
     # Offload heavy AI processing to background task
-    background_tasks.add_task(async_generate_storyboard, task_id, req.prompt, req.visual_description, req.use_rag, req.script_dialogue, req.base_model_path, req.lora_path, req.bleu_score, req.nlp_scores, req.prompt_technique)
+    background_tasks.add_task(
+        async_generate_storyboard, 
+        task_id, 
+        request.prompt, 
+        request.visual_description, 
+        request.use_rag, 
+        request.script_dialogue,
+        request.base_model_path,
+        request.lora_path,
+        request.bleu_score,
+        request.nlp_scores,
+        request.prompt_technique,
+        request.use_controlnet
+    )
     
     return TaskStatusResponse(task_id=task_id, status="pending")
 
 @app.post("/api/generate-full")
-async def generate_full_storyboard(req: FullGenerationRequest, background_tasks: BackgroundTasks):
+async def generate_full_storyboard(request: FullGenerationRequest, background_tasks: BackgroundTasks):
     task_id = str(uuid.uuid4())
     
     tasks_db[task_id] = {
@@ -536,7 +559,16 @@ async def generate_full_storyboard(req: FullGenerationRequest, background_tasks:
         "result": None
     }
     
-    background_tasks.add_task(async_generate_full_storyboard, task_id, req.concept, req.use_rag, req.base_model_path, req.lora_path, req.prompt_technique)
+    background_tasks.add_task(
+        async_generate_full_storyboard,
+        task_id,
+        request.concept,
+        request.use_rag,
+        request.base_model_path,
+        request.lora_path,
+        request.prompt_technique,
+        request.use_controlnet
+    )
     
     return TaskStatusResponse(task_id=task_id, status="pending")
 

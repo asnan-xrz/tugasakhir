@@ -43,7 +43,7 @@ def _query_rag_sync(scene_text: str) -> list:
     try:
         results = collection.query(
             query_texts=[scene_text],
-            n_results=3 # Mengambil 3 dokumen agar konteks visual lebih kaya
+            n_results=15 # Mengambil 15 dokumen agar lebih banyak variasi Q-series yang terjaring
         )
         context_list = []
         if results and 'documents' in results and results['documents'] and len(results['documents'][0]) > 0:
