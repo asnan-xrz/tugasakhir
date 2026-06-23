@@ -12,48 +12,55 @@ async def enhance_prompt(base_prompt: str, visual_description: str = None, conte
     print(f"Director AI enhancing prompt with technique: {technique}...")
     
     if technique == "few-shot":
-        director_prompt = f"""You are a professional Film Director and Cinematographer.
-Your job is to translate the following scene description into a highly technical, comma-separated image generation prompt for Stable Diffusion.
-Focus on extracting the location, action, characters, and applying professional cinematography terms: Camera Angle (e.g., Low angle, High angle, Eye level), Framing (e.g., Close Up, Medium Shot, Long Shot), and Lighting (e.g., Warm, Cinematic, Natural).
-Return ONLY the final prompt string without any conversational text or quotes.
+        director_prompt = f"""You are a professional Film Director and Cinematographer tasked with writing Stable Diffusion image prompts.
 
-Example 1:
-Scene: Budi berjalan di lorong gelap.
-Output: masterpiece, high resolution, 8k, highly detailed, Medium Shot, low key lighting, Budi walking down a dark corridor, dramatic shadows, cinematic lighting
+Below are three EXAMPLES showing how to convert a scene description into a detailed, comma-separated image generation prompt:
 
-Example 2:
-Scene: Rina tersenyum melihat hujan di jendela.
-Output: masterpiece, high resolution, 8k, highly detailed, Close Up, warm lighting, Rina smiling looking at the rain through a window, soft reflections, cinematic lighting
+[EXAMPLE 1]
+Input Scene: Budi berjalan sendirian di lorong gedung kampus yang gelap dan sepi malam hari.
+Output Prompt: cinematic film still, medium shot, low-key lighting, university corridor at night, lone student walking, harsh shadows, film grain, cool blue tones, 35mm lens, depth of field, photorealistic
 
-Example 3:
-Scene: Upacara bendera di lapangan sekolah pagi hari.
-Output: masterpiece, high resolution, 8k, highly detailed, Wide Shot, bright natural morning lighting, national flag raising ceremony on the school field, majestic atmosphere, cinematic lighting
+[EXAMPLE 2]
+Input Scene: Rina berdiri di depan papan pengumuman kampus dengan ekspresi cemas mencari pengumuman kelulusan.
+Output Prompt: cinematic film still, close-up shot, warm golden hour lighting, campus notice board, anxious female student scanning papers, handheld camera feel, shallow depth of field, tense emotional atmosphere, bokeh background, photorealistic
 
-Scene Context: {base_prompt}
-"""
+[EXAMPLE 3]
+Input Scene: Upacara bendera pagi hari di lapangan ITS dihadiri ratusan mahasiswa seragam putih.
+Output Prompt: cinematic wide shot, eye-level angle, bright natural morning light, large university field, hundreds of students in white uniforms, flag ceremony, majestic composition, epic atmosphere, aerial perspective, photorealistic
+
+Now generate a Stable Diffusion prompt for the following scene by following the exact same pattern as the examples above.
+Output ONLY the final prompt string. No explanation, no preamble, no quotes.
+
+Input Scene: {base_prompt}
+Output Prompt:"""
+
     elif technique == "cot":
-        director_prompt = f"""You are a professional Film Director and Cinematographer.
-Your job is to translate the following scene description into a highly technical, comma-separated image generation prompt for Stable Diffusion.
-Focus on extracting the location, action, characters, and applying professional cinematography terms: Camera Angle (e.g., Low angle, High angle, Eye level), Framing (e.g., Close Up, Medium Shot, Long Shot), and Lighting (e.g., Warm, Cinematic, Natural).
+        director_prompt = f"""You are a professional Film Director and Cinematographer. Your task is to write a Stable Diffusion image generation prompt.
 
-Instructions: Let's think step by step: first analyze the mood, then choose camera angle, then lighting, finally output the prompt enclosed in <final_prompt> tags (e.g., <final_prompt>masterpiece, high resolution, ...</final_prompt>).
+Use the following step-by-step reasoning process before writing your final prompt:
 
-Scene Context: {base_prompt}
-"""
-    else: # zero-shot
-        director_prompt = f"""You are a professional Film Director and Cinematographer.
-Your job is to translate the following scene description into a highly technical, comma-separated image generation prompt for Stable Diffusion.
-Focus on extracting the location, action, characters, and applying professional cinematography terms: Camera Angle (e.g., Low angle, High angle, Eye level), Framing (e.g., Close Up, Medium Shot, Long Shot), and Lighting (e.g., Warm, Cinematic, Natural).
-Return ONLY the final prompt string without any conversational text or quotes.
+STEP 1 - MOOD ANALYSIS: What is the overall emotional tone and mood of this scene? (e.g., melancholic, joyful, tense, serene)
+STEP 2 - SUBJECT & SETTING: Who or what is the main subject? Where does this take place?
+STEP 3 - CAMERA ANGLE: Based on the mood, what is the best camera angle? (e.g., Low angle to convey power, Close-up for emotion, Wide shot for scale)
+STEP 4 - LIGHTING: What kind of lighting best matches the mood? (e.g., warm golden hour, cold blue night, harsh sunlight, soft diffused)
+STEP 5 - CINEMATOGRAPHY STYLE: What visual style fits this scene? (e.g., documentary realism, cinematic epic, intimate handheld)
+STEP 6 - FINAL PROMPT: Combine all the above into a comma-separated Stable Diffusion prompt.
 
-Scene Context: {base_prompt}
-"""
+Write your reasoning for each step, then output ONLY the final prompt inside <final_prompt></final_prompt> tags.
+
+Scene: {base_prompt}"""
+
+    else:  # zero-shot
+        director_prompt = f"""Convert the scene description below into a Stable Diffusion image prompt.
+Output ONLY a short comma-separated list of keywords and technical photography terms. No full sentences, no explanation.
+
+Scene: {base_prompt}
+Prompt:"""
+
     if visual_description:
-        director_prompt += f"\nTarget Visual Style (Director's Vision): {visual_description}"
+        director_prompt += f"\nVisual Style Reference: {visual_description}"
     if context_str:
-        director_prompt += f"\nHistorical Visual References to integrate: {context_str}"
-        
-    director_prompt += "\n\nFormat: masterpiece, high resolution, 8k, highly detailed, [cinematography terms], [location details], [action details], cinematic lighting"
+        director_prompt += f"\nRAG Context References: {context_str}"
 
     try:
         from dotenv import load_dotenv

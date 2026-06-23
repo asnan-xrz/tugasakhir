@@ -142,8 +142,10 @@ function App() {
               script_dialogue: statusRes.data.result.script_dialogue,
               rag_context: statusRes.data.result.rag_context,
               mode_ablasi: statusRes.data.result.mode_ablasi,
+              prompt_technique: statusRes.data.result.prompt_technique || promptTechnique,
               bleu_score: statusRes.data.result.bleu_score,
-              nlp_scores: statusRes.data.result.nlp_scores
+              nlp_scores: statusRes.data.result.nlp_scores,
+              rag_similarity: statusRes.data.result.rag_similarity
             }]);
             setIsGenerating(false);
             setOrchestrationStatus('');
@@ -187,7 +189,8 @@ function App() {
     try {
       const startRes = await axios.post(`${API_URL}/api/generate-full`, { 
         concept: concept.trim(),
-        use_rag: useRag
+        use_rag: useRag,
+        prompt_technique: promptTechnique
       });
       const taskId = startRes.data.task_id;
 
@@ -219,6 +222,10 @@ function App() {
                     audio: s.audio,
                     keterangan: s.keterangan,
                     url: s.image_url ? (s.image_url.startsWith('http') ? s.image_url : `${API_URL}${s.image_url}`) : null,
+                    rag_context: s.rag_context,
+                    mode_ablasi: s.mode_ablasi,
+                    prompt_technique: s.prompt_technique,
+                    rag_similarity: s.rag_similarity,
                     isUpscaling: false,
                     isGeneratingStatus: s.is_generating !== undefined ? s.is_generating : false,
                     bleu_score: s.bleu_score,
@@ -235,10 +242,13 @@ function App() {
                 const mappedUrls = statusRes.data.result_scenes.map(s => ({
                     id: s.id, prompt: s.enhanced_prompt, original_prompt: s.original_prompt,
                     script_dialogue: s.script_dialogue, visual_description: s.visual_description,
-                    scene_no: s.scene_no, 
+                    scene_no: s.scene_no,
                     durasi: s.durasi, transisi: s.transisi, audio: s.audio, keterangan: s.keterangan,
                     url: s.image_url ? (s.image_url.startsWith('http') ? s.image_url : `${API_URL}${s.image_url}`) : null,
-                    rag_context: s.rag_context, mode_ablasi: s.mode_ablasi, isUpscaling: false, isGeneratingStatus: false,
+                    rag_context: s.rag_context, mode_ablasi: s.mode_ablasi,
+                    prompt_technique: s.prompt_technique,
+                    rag_similarity: s.rag_similarity,
+                    isUpscaling: false, isGeneratingStatus: false,
                     bleu_score: s.bleu_score, nlp_scores: s.nlp_scores
                 }));
                 setImages(mappedUrls);
@@ -539,8 +549,6 @@ function App() {
           </div>
 
           <div className="flex items-center gap-4 text-sm">
-            <span className="text-slate-400 hover:text-cyan-100 cursor-pointer text-xs font-medium transition-colors">Sign in</span>
-            <div className="w-px h-4 bg-cyan-900/50"></div>
             <span className="flex items-center gap-2 text-cyan-100 bg-[#0A1A2F]/40 px-2.5 py-1 rounded-full border border-emerald-400/20 text-[11px] font-semibold tracking-wide shadow-[0_0_10px_rgba(0,255,191,0.05)]">
               <span className={`w-1.5 h-1.5 rounded-full ${backendStatus === 'Connected' ? 'bg-emerald-400 shadow-[0_0_8px_rgba(0,255,191,0.8)] animate-pulse-slow' : 'bg-rose-500'}`}></span>
               {backendStatus === 'Connected' ? 'Backend Active' : 'Offline'}
@@ -640,6 +648,11 @@ function App() {
                             <span className="bg-emerald-950/40 border border-emerald-500/25 text-emerald-400 px-1.5 py-0.5 rounded">
                               R-L: {(scene.nlp_scores.rougeL * 100).toFixed(1)}%
                             </span>
+                            {scene.nlp_scores.cosine !== undefined && (
+                              <span className="bg-purple-950/40 border border-purple-500/25 text-purple-400 px-1.5 py-0.5 rounded">
+                                COS: {(scene.nlp_scores.cosine * 100).toFixed(1)}%
+                              </span>
+                            )}
                           </div>
                         )}
                         <p className="text-[10px] text-cyan-500/0 mt-2 group-hover:text-cyan-500/70 transition-colors uppercase tracking-widest font-semibold relative z-10">
@@ -679,22 +692,31 @@ function App() {
             <div className="p-6 bg-[#050810] z-10 shrink-0 border-t border-cyan-900/30 print:hidden">
               <div className="flex justify-between items-center mb-3 px-2">
                 <span className="text-xs text-cyan-600 font-semibold uppercase tracking-widest">Generation Settings</span>
-                <label className="flex items-center gap-3 cursor-pointer group">
-                  <span className={`text-[10px] uppercase font-bold tracking-wider transition-colors ${useRag ? 'text-cyan-400/80 group-hover:text-cyan-300' : 'text-slate-500 group-hover:text-slate-400'}`}>
-                    Gunakan Grounding RAG (Aset ITS)
+                <div className="flex items-center gap-3">
+                  <span className={`text-[10px] uppercase font-bold tracking-wider transition-colors ${useRag ? 'text-emerald-400' : 'text-red-400'}`}>
+                    Grounding RAG
                   </span>
-                  <div className="relative">
-                    <input 
-                      type="checkbox" 
-                      className="sr-only" 
-                      checked={useRag} 
-                      onChange={(e) => setUseRag(e.target.checked)} 
+                  <div className="flex bg-[#0A1A2F] rounded-lg border border-slate-700 p-0.5">
+                    <button
+                      onClick={() => setUseRag(true)}
                       disabled={isGenerating}
-                    />
-                    <div className={`block w-8 h-4 rounded-full transition-colors duration-300 ${useRag ? 'bg-emerald-500/80' : 'bg-[#0A1A2F] border border-slate-700'}`}></div>
-                    <div className={`dot absolute left-1 top-1 bg-white w-2 h-2 rounded-full transition-transform duration-300 ${useRag ? 'transform translate-x-4' : ''}`}></div>
+                      className={`px-3 py-1 text-[10px] font-bold tracking-wider uppercase rounded-md transition-all ${
+                        useRag ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      ON
+                    </button>
+                    <button
+                      onClick={() => setUseRag(false)}
+                      disabled={isGenerating}
+                      className={`px-3 py-1 text-[10px] font-bold tracking-wider uppercase rounded-md transition-all ${
+                        !useRag ? 'bg-red-600/80 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      OFF
+                    </button>
                   </div>
-                </label>
+                </div>
               </div>
 
               {/* Prompting Technique Selection */}
@@ -783,16 +805,31 @@ function App() {
               <div className="p-6 bg-[#050810] z-10 shrink-0 border-t border-cyan-900/30 print:hidden">
                 <div className="flex justify-between items-center mb-3 px-2">
                   <span className="text-xs text-cyan-600 font-semibold uppercase tracking-widest">Generation Settings</span>
-                  <label className="flex items-center gap-3 cursor-pointer group">
-                    <span className={`text-[10px] uppercase font-bold tracking-wider transition-colors ${useRag ? 'text-cyan-400/80 group-hover:text-cyan-300' : 'text-slate-500 group-hover:text-slate-400'}`}>
-                      Gunakan RAG
+                  <div className="flex items-center gap-3">
+                    <span className={`text-[10px] uppercase font-bold tracking-wider transition-colors ${useRag ? 'text-emerald-400' : 'text-red-400'}`}>
+                      Grounding RAG
                     </span>
-                    <div className="relative">
-                      <input type="checkbox" className="sr-only" checked={useRag} onChange={(e) => setUseRag(e.target.checked)} disabled={isGenerating} />
-                      <div className={`block w-8 h-4 rounded-full transition-colors duration-300 ${useRag ? 'bg-emerald-500/80' : 'bg-[#0A1A2F] border border-slate-700'}`}></div>
-                      <div className={`dot absolute left-1 top-1 bg-white w-2 h-2 rounded-full transition-transform duration-300 ${useRag ? 'transform translate-x-4' : ''}`}></div>
+                    <div className="flex bg-[#0A1A2F] rounded-lg border border-slate-700 p-0.5">
+                      <button
+                        onClick={() => setUseRag(true)}
+                        disabled={isGenerating}
+                        className={`px-3 py-1 text-[10px] font-bold tracking-wider uppercase rounded-md transition-all ${
+                          useRag ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        ON
+                      </button>
+                      <button
+                        onClick={() => setUseRag(false)}
+                        disabled={isGenerating}
+                        className={`px-3 py-1 text-[10px] font-bold tracking-wider uppercase rounded-md transition-all ${
+                          !useRag ? 'bg-red-600/80 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        OFF
+                      </button>
                     </div>
-                  </label>
+                  </div>
                 </div>
                 
                 <button
@@ -902,7 +939,7 @@ function App() {
                     <tbody className="divide-y divide-slate-800">
                       {images.map((img, index) => {
                         // Extracting some logical chunks if possible, else falling back gracefully
-                        const cleanedPrompt = img.prompt.replace(/masterpiece/gi, '')
+                        const cleanedPrompt = (img.prompt || '').replace(/masterpiece/gi, '')
                                                         .replace(/high resolution/gi, '')
                                                         .replace(/highly detailed/gi, '')
                                                         .replace(/8k/gi, '')
@@ -917,34 +954,21 @@ function App() {
 
                         return (
                           <tr key={img.id} className="transition-colors hover:bg-slate-800/40">
-                            <td className="px-2 py-4 align-middle border border-slate-700 font-bold text-sm text-cyan-100">{img.scene_no || index + 1}</td>
+                            <td className="px-2 py-4 align-middle border border-slate-700 font-bold text-sm text-cyan-100">
+                              <div className="flex flex-col items-center gap-1.5">
+                                <span>{img.scene_no || index + 1}</span>
+                                {img.prompt_technique && (
+                                  <span className={`text-[8px] font-extrabold tracking-widest px-1.5 py-0.5 rounded border uppercase
+                                    ${ img.prompt_technique === 'zero-shot' ? 'bg-blue-900/40 border-blue-500/40 text-blue-300'
+                                      : img.prompt_technique === 'few-shot' ? 'bg-amber-900/40 border-amber-500/40 text-amber-300'
+                                      : 'bg-purple-900/40 border-purple-500/40 text-purple-300' }`}>
+                                    {img.prompt_technique === 'zero-shot' ? 'ZERO' : img.prompt_technique === 'few-shot' ? 'FEW' : 'COT'}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
                             <td className="px-3 py-4 align-top border border-slate-700 text-left font-medium text-slate-300">
                               {renderWithItalics(img.original_prompt ? img.original_prompt : cleanedPrompt)}
-                              {img.nlp_scores ? (
-                                <div className="mt-2 flex flex-wrap gap-1.5 font-mono text-[8px]">
-                                  <span className="bg-slate-950/60 border border-cyan-800/30 text-cyan-300 px-1 py-0.2 rounded">
-                                    B1: {(img.nlp_scores.bleu1 * 100).toFixed(1)}%
-                                  </span>
-                                  <span className="bg-slate-950/60 border border-cyan-800/30 text-cyan-300 px-1 py-0.2 rounded">
-                                    B2: {(img.nlp_scores.bleu2 * 100).toFixed(1)}%
-                                  </span>
-                                  <span className="bg-slate-950/60 border border-cyan-800/30 text-cyan-300 px-1 py-0.2 rounded">
-                                    B3: {(img.nlp_scores.bleu3 * 100).toFixed(1)}%
-                                  </span>
-                                  <span className="bg-slate-950/60 border border-cyan-800/30 text-cyan-300 px-1 py-0.2 rounded">
-                                    B4: {(img.nlp_scores.bleu4 * 100).toFixed(1)}%
-                                  </span>
-                                  <span className="bg-emerald-950/40 border border-emerald-500/25 text-emerald-400 px-1 py-0.2 rounded">
-                                    R-L: {(img.nlp_scores.rougeL * 100).toFixed(1)}%
-                                  </span>
-                                </div>
-                              ) : (img.bleu_score !== undefined && img.bleu_score !== null && (
-                                <div className="mt-2 flex items-center gap-1.5">
-                                  <span className={`text-[9px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded border ${img.bleu_score > 0.05 ? 'text-emerald-400/80 bg-emerald-900/20 border-emerald-500/20' : 'text-amber-400/80 bg-amber-900/20 border-amber-500/20'}`}>
-                                    BLEU Similarity: {(img.bleu_score * 100).toFixed(2)}%
-                                  </span>
-                                </div>
-                              ))}
                             </td>
                             <td className="px-2 py-4 align-top border border-slate-700 font-medium">
                               {img.script_dialogue ? <span className="italic text-cyan-400">VO: "{renderWithItalics(img.script_dialogue)}"</span> : '-'}
@@ -997,8 +1021,49 @@ function App() {
                                 </div>
                               )}
                             </td>
-                            <td className="px-2 py-4 align-middle border border-slate-700 font-medium text-slate-300">
-                              {renderWithItalics(img.visual_description || 'N/A')}
+                            <td className="px-2 py-4 align-top border border-slate-700 font-medium text-slate-300">
+                              {/* Enhanced Prompt from LLM + Evaluation Metrics */}
+                              {img.prompt ? (
+                                <div>
+                                  <p className="text-[8px] uppercase tracking-widest text-cyan-600/60 font-bold mb-1">SD Prompt (LLM Output):</p>
+                                  <p className="text-[10px] text-emerald-200/80 leading-relaxed italic font-light">{img.prompt}</p>
+
+                                  {/* Metrics placed here — they compare SD Prompt vs original scene input */}
+                                  {img.nlp_scores && (
+                                    <div className="mt-2 pt-2 border-t border-slate-700/50">
+                                      <p className="text-[8px] uppercase tracking-widest text-yellow-500/70 font-bold mb-1">
+                                        Eval: SD Prompt vs Scene Input
+                                      </p>
+                                      <div className="flex flex-wrap gap-1 font-mono text-[8px]">
+                                        <span className="bg-slate-950/60 border border-cyan-800/30 text-cyan-300 px-1 py-0.5 rounded">B1: {(img.nlp_scores.bleu1 * 100).toFixed(1)}%</span>
+                                        <span className="bg-slate-950/60 border border-cyan-800/30 text-cyan-300 px-1 py-0.5 rounded">B2: {(img.nlp_scores.bleu2 * 100).toFixed(1)}%</span>
+                                        <span className="bg-slate-950/60 border border-cyan-800/30 text-cyan-300 px-1 py-0.5 rounded">B3: {(img.nlp_scores.bleu3 * 100).toFixed(1)}%</span>
+                                        <span className="bg-slate-950/60 border border-cyan-800/30 text-cyan-300 px-1 py-0.5 rounded">B4: {(img.nlp_scores.bleu4 * 100).toFixed(1)}%</span>
+                                        <span className="bg-emerald-950/40 border border-emerald-500/25 text-emerald-400 px-1 py-0.5 rounded">R-L: {(img.nlp_scores.rougeL * 100).toFixed(1)}%</span>
+                                        {img.nlp_scores.cosine !== undefined && (
+                                          <span className="bg-purple-950/40 border border-purple-500/25 text-purple-400 px-1 py-0.5 rounded">COS: {(img.nlp_scores.cosine * 100).toFixed(1)}%</span>
+                                        )}
+                                        {img.rag_similarity !== undefined && img.rag_similarity !== null && (
+                                          <span className={`px-1 py-0.5 rounded border font-bold ${
+                                            img.mode_ablasi
+                                              ? 'bg-rose-950/40 border-rose-700/40 text-rose-400'
+                                              : 'bg-amber-950/40 border-amber-500/25 text-amber-300'
+                                          }`}>
+                                            RAG: {img.mode_ablasi ? '0.0%' : `${img.rag_similarity.toFixed(1)}%`}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {img.visual_description && img.visual_description !== 'N/A' && (
+                                    <div className="mt-2 pt-2 border-t border-slate-700/50">
+                                      <p className="text-[8px] uppercase tracking-widest text-cyan-600/60 font-bold mb-0.5">Deskripsi Visual Naskah:</p>
+                                      <p className="text-[10px] text-slate-400">{renderWithItalics(img.visual_description)}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : renderWithItalics(img.visual_description || 'N/A')}
                             </td>
                             <td className="px-2 py-4 align-middle border border-slate-700 text-cyan-300 font-mono">
                               {renderWithItalics(duration)}

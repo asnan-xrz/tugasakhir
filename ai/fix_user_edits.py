@@ -1,0 +1,100 @@
+import csv
+
+replacements = {
+    "Q136.jpg|0": "Q136.jpg|0|Boneka maskot ITS bernama Cak Seno yang berwarna biru dengan aksen kuning dan kacamata tampak menghadap ke depan dalam gambar ini.",
+    "Q136.jpg|1": "Q136.jpg|1|Boneka Cak Seno tersebut mengenakan seragam biru yang menyerupai jas lab, dengan detail seperti lencana kecil di bagian dada.",
+    "Q136.jpg|2": "Q136.jpg|2|Ekspresi boneka Cak Seno terlihat ramah dan ceria, seolah sedang menyapa atau berinteraksi dengan penonton.",
+    "Q136.jpg|3": "Q136.jpg|3|Di bagian atas kepala boneka Cak Seno terdapat simbol yang mengindikasikan identitas institusinya, yakni Institut Teknologi Sepuluh Nopember.",
+    "Q137.jpg|0": "Q137.jpg|0|Boneka maskot ITS bernama Cak Seno yang berwarna biru dengan aksen kuning dan kacamata bulat menjadi subjek utama gambar ini, menghadap ke arah kanan.",
+    "Q137.jpg|1": "Q137.jpg|1|Boneka Cak Seno tersebut mengenakan seragam biru tua yang menyerupai jas, dengan detail kepala yang bulat dan ekspresi wajah ramah.",
+    "Q137.jpg|3": "Q137.jpg|3|Di bagian atas kepala boneka Cak Seno terdapat logo atau simbol yang mengindikasikan identitas institusi Institut Teknologi Sepuluh Nopember.",
+    "Q138.jpg|0": "Q138.jpg|0|Karakter maskot ITS bernama Cak Seno yang berwarna biru dan kuning dengan kacamata sedang berpose di depan gedung.",
+    "Q138.jpg|1": "Q138.jpg|1|Maskot Cak Seno ini mengenakan jaket biru, celana kuning bermotif, dan sarung tangan biru.",
+    "Q138.jpg|2": "Q138.jpg|2|Tangan kanan maskot Cak Seno menunjuk ke arah kiri sementara tangan kirinya terlipat di depan dada.",
+    "Q138.jpg|3": "Q138.jpg|3|Latar belakangnya adalah bangunan modern dengan jendela besar and kolam air yang tenang.",
+    "Q139.jpg|0": "Q139.jpg|0|Satu orang mengenakan kostum maskot ITS bernama Cak Seno yang didominasi warna biru dan kuning, berdiri di luar gedung.",
+    "Q139.jpg|1": "Q139.jpg|1|Kostum maskot Cak Seno tersebut terdiri dari jaket biru dengan tulisan ITS di sisi kiri dada, celana kuning bermotif, dan sarung tangan serta sepatu biru.",
+    "Q139.jpg|2": "Q139.jpg|2|Maskot Cak Seno ini sedang melakukan gerakan tangan ke arah wajahnya, seolah menyapa atau menarik perhatian.",
+    "Q139.jpg|3": "Q139.jpg|3|Di bagian dada jaket maskot Cak Seno terdapat logo dan tulisan ITS, yang merupakan singkatan dari Institut Teknologi Sepuluh Nopember.",
+    "Q140.jpg|0": "Q140.jpg|0|Satu orang yang mengenakan kostum karakter maskot ITS bernama Cak Seno sedang berdiri di luar, dengan pakaian yang menutupi seluruh tubuhnya.",
+    "Q140.jpg|1": "Q140.jpg|1|Kostum tersebut merupakan wujud dari maskot Cak Seno yang terdiri dari jaket biru, celana kuning bermotif, sarung tangan dan sepatu biru muda, serta helm biru dengan aksen kuning dan kacamata putih.",
+    "Q140.jpg|2": "Q140.jpg|2|Maskot Cak Seno tersebut tampak sedang melakukan gerakan tangan ke arah mulut, seolah-olah sedang berbicara atau bersin.",
+    "Q140.jpg|3": "Q140.jpg|3|Di bagian dada jaket maskot Cak Seno terdapat tulisan ITS yang merupakan singkatan dari Institut Teknologi Sepuluh Nopember.",
+    "Q141.jpg|0": "Q141.jpg|0|Satu orang mengenakan kostum karakter berwarna biru dan kuning yang merupakan maskot ITS bernama Cak Seno.",
+    "Q141.jpg|1": "Q141.jpg|1|Kostum maskot Cak Seno tersebut terdiri dari jaket biru, celana kuning bermotif, sarung tangan biru, dan sepatu biru dengan detail putih.",
+    "Q141.jpg|2": "Q141.jpg|2|Maskot Cak Seno tersebut sedang melakukan gerakan tangan ke arah dada, seolah memberikan isyarat atau salam.",
+    "Q141.jpg|3": "Q141.jpg|3|Di bagian atas kepala kostum maskot Cak Seno terdapat logo kecil yang merupakan lambang institusi Institut Teknologi Sepuluh Nopember.",
+    "Q142.jpg|0": "Q142.jpg|0|Satu orang yang mengenakan kostum karakter maskot ITS bernama Cak Seno berwarna biru dan kuning terlihat dalam gambar.",
+    "Q142.jpg|1": "Q142.jpg|1|Kostum maskot Cak Seno tersebut dilengkapi dengan kacamata, topi dengan aksen kuning, jaket biru, celana kuning bermotif, dan sarung tangan biru.",
+    "Q142.jpg|2": "Q142.jpg|2|Maskot Cak Seno tersebut tampak sedang melakukan gerakan tangan ke arah dada dengan ekspresi wajah tersenyum.",
+    "Q142.jpg|3": "Q142.jpg|3|Di bagian atas kepala kostum maskot Cak Seno terdapat logo atau simbol resmi Institut Teknologi Sepuluh Nopember.",
+    "Q143.jpg|0": "Q143.jpg|0|Seorang pria laki-laki terlihat memegang boneka karakter maskot ITS bernama Cak Seno yang lucu.",
+    "Q143.jpg|2": "Q143.jpg|2|Pria tersebut tampak sedang tersenyum sambil menunjukkan ekspresi ramah ke arah kamera bersama boneka Cak Seno di tangannya.",
+    "Q143.jpg|3": "Q143.jpg|3|Boneka Cak Seno yang dipegangnya mengenakan seragam biru dengan tulisan STI dan logo yang terkait dengan Institut Teknologi Sepuluh Nopember (ITS).",
+    "Q144.jpg|0": "Q144.jpg|0|Seorang pria dewasa laki-laki terlihat dalam gambar ini memegang boneka maskot ITS bernama Cak Seno.",
+    "Q144.jpg|2": "Q144.jpg|2|Pria tersebut sedang memegang boneka Cak Seno yang bermotif biru dan putih dengan ekspresi tersenyum.",
+    "Q144.jpg|3": "Q144.jpg|3|Terdapat tulisan ITS yang jelas terbaca pada tali identitas biru yang dikenakannya di dekat boneka Cak Seno tersebut.",
+    "Q145.jpg|0": "Q145.jpg|0|Satu orang laki-laki terlihat dalam gambar, mengenakan topi hitam dengan tulisan Compass dan kacamata hitam sambil membawa boneka maskot ITS bernama Cak Seno.",
+    "Q145.jpg|2": "Q145.jpg|2|Laki-laki tersebut tersenyum lebar sambil memegang boneka Cak Seno biru putih yang mengenakan kacamata dan seragam.",
+    "Q145.jpg|3": "Q145.jpg|3|Boneka Cak Seno tersebut memiliki logo kecil di dada yang menyerupai lambang Institut Teknologi Sepuluh Nopember (ITS).",
+    "Q146.jpg|0": "Q146.jpg|0|Seorang pria dewasa laki-laki terlihat dalam gambar ini sedang menunjukkan boneka maskot ITS bernama Cak Seno.",
+    "Q146.jpg|2": "Q146.jpg|2|Pria tersebut tersenyum lebar sambil memegang boneka kartun Cak Seno berwarna biru dan putih yang mengenakan kacamata.",
+    "Q146.jpg|3": "Q146.jpg|3|Terdapat tanda pengenal berwarna biru dengan tulisan TEKNO yang terlihat jelas di lehernya, tepat di samping boneka Cak Seno.",
+    "Q146.jpg|4": "Q146.jpg|4|Latar belakang menunjukkan interior kendaraan dengan atap transparan, serta tampak sebagian dari lingkungan luar seperti pepohonan dan bangunan.",
+    "Q147.jpg|0": "Q147.jpg|0|Seorang pria muda berambut pendek mengenakan topi abu-abu dan kacamata hitam tersenyum lebar sambil memegang boneka maskot ITS bernama Cak Seno.",
+    "Q147.jpg|1": "Q147.jpg|1|Ia mengenakan jaket abu-abu dengan lanyard biru di lehernya, dan boneka Cak Seno tersebut mengenakan seragam biru bertuliskan ITS di dada.",
+    "Q147.jpg|2": "Q147.jpg|2|Pria tersebut tampak gembira dan menunjukkan ekspresi ramah ke arah kamera bersama boneka Cak Seno.",
+    "Q147.jpg|3": "Q147.jpg|3|Boneka Cak Seno tersebut memiliki tulisan ITS dan lambang institusi di seragamnya, serta kacamata bulat dan rambut kuning kecil di sisi kanan kepalanya.",
+    "Q147.jpg|4": "Q147.jpg|4|Latar belakang terlihat seperti interior kendaraan atau ruangan tertutup dengan pencahayaan terang dan beberapa benda di sekitarnya.",
+    "Q148.jpg|0": "Q148.jpg|0|Satu orang laki-laki terlihat dalam gambar, mengenakan kemeja abu-abu muda dan topi baseball hitam bersama boneka maskot ITS bernama Cak Seno.",
+    "Q148.jpg|1": "Q148.jpg|1|Ia memakai kacamata hitam, lanyard biru dengan tulisan INSTITUT TEKNOLOGI SEPULUH NOPEMBER, dan memegang boneka Cak Seno berwarna biru dan putih di tangannya.",
+    "Q148.jpg|2": "Q148.jpg|2|Laki-laki tersebut tampak sedang berbicara atau tersenyum ke arah kamera sambil memegang boneka Cak Seno tersebut.",
+    "Q148.jpg|3": "Q148.jpg|3|Boneka Cak Seno yang dipegangnya memiliki tulisan angka 217 di bagian dada birunya.",
+    "Q149.jpg|0": "Q149.jpg|0|Seorang wanita berpakaian putih dan hijab putih berpose bersama kostum maskot ITS bernama Cak Seno di depan latar belakang Institut Teknologi Sepuluh Nopember.",
+    "Q149.jpg|1": "Q149.jpg|1|Maskot Cak Seno mengenakan seragam biru lengkap dengan kacamata dan topi, sementara wanita memakai kemeja putih dan tas selempang hitam.",
+    "Q149.jpg|2": "Q149.jpg|2|Keduanya menempatkan tangan di dada dengan ekspresi senyum ramah yang kompak.",
+    "Q149.jpg|3": "Q149.jpg|3|Teks Institut Teknologi Sepuluh Nopember terlihat jelas pada logo di belakang wanita dan maskot Cak Seno tersebut.",
+    "Q150.jpg|0": "Q150.jpg|0|Patung karakter kartun dari maskot ITS bernama Cak Seno yang berwarna biru dan kuning terlihat menonjol di dalam ruangan.",
+    "Q150.jpg|1": "Q150.jpg|1|Patung maskot Cak Seno ini memiliki rambut kuning berbentuk kobaran api, kacamata besar, dan mengenakan jaket biru dengan tulisan ITS di sisi kirinya.",
+    "Q150.jpg|2": "Q150.jpg|2|Teks nama CAK SENO dan hashtag #CeritaYuhana tercetak jelas di bagian papan bawah patung tersebut.",
+    "Q150.jpg|3": "Q150.jpg|3|Di sekeliling patung Cak Seno, terdapat tangga marmer gelap dan tanaman hijau yang menambah kesan formal pada area tersebut.",
+    "Q170.jpg|0": "Q170.jpg|0|Gambar menunjukkan empat orang mahasiswi yang sedang berdiri berjejer di koridor bangunan sambil berpose menghadap kamera. Mereka semua mengenakan seragam yang sama berupa jas almamater berwarna biru tua dengan logo \"ITS\" yang dibordir di bagian dada sebelah kiri, dipadukan dengan bawahan rok panjang hitam, kaos kaki putih tinggi, dan sepatu pantofel hitam.",
+    "Q170.jpg|1": "Q170.jpg|1|Tiga dari mahasiswi tersebut mengenakan jilbab berwarna putih yang dimasukkan ke dalam kerah jas almamater mereka. Sementara itu, mahasiswi kedua dari kiri tidak mengenakan jilbab, memiliki rambut panjang hitam yang diikat rapi, dan mengenakan kemeja putih di dalam jasnya lengkap dengan dasi hitam kecil.",
+    "Q170.jpg|2": "Q170.jpg|2|Keempat mahasiswi tersebut berpose kompak dengan tangan kanan mereka memegang atau menyentuh bagian kerah atau dada kiri jas almamater mereka, seolah-olah ingin menonjolkan logo \"ITS\" yang tertera di sana. Mereka semua tersenyum manis ke arah kamera dengan posisi kaki yang sedikit melangkah ke depan secara anggun.",
+    "Q170.jpg|3": "Q170.jpg|3|Latar tempat berada di sebuah koridor atau lorong luar ruangan yang memiliki lantai keramik putih bersih dan mengkilap yang memantulkan bayangan mereka. Di sebelah kiri terdapat dinding semen abu-abu dengan papan pengumuman berbingkai kuning yang terpasang berjejer.",
+    "Q170.jpg|4": "Q170.jpg|4|Latar belakang koridor memanjang ke belakang dengan langit-langit berwarna cokelat muda. Di sisi kanan luar lorong, terlihat suasana halaman kampus yang samar-samar dengan pepohonan hijau, serta ada seorang mahasiswa lain yang mengenakan jas almamater serupa sedang duduk di kejauhan.",
+    "Q194.jpg|3": "Q194.jpg|3|Ijazah berwarna biru dengan tulisan IJAZAH MAGISTER dan logo Institut Teknologi Sepuluh Nopember Surabaya yang tercetak emas.",
+    "Q259.jpg|3": "Q259.jpg|3|Latar belakangnya adalah panggung wisuda yang dilengkapi dengan dekorasi bunga segar dan tirai biru muda.",
+    "Q260.jpg|0": "Q260.jpg|0|Dalam gambar, terdapat enam orang pria yang sedang duduk berjejer di kursi, mengenakan jubah wisuda hitam lengkap dengan topi wisuda (mortarboard), samir (kalung) biru, dan selendang (sash) marun bertuliskan \"CUM\" yang terlihat sebagian. Tiga orang di antaranya menggunakan kacamata dan empat orang lainnya tersenyum ke arah kamera.",
+    "Q260.jpg|1": "Q260.jpg|1|Para wisudawan berpose menghadap kamera, di mana orang di sisi paling kiri memberikan tanda jempol ke atas dengan tangan kanannya, dan orang di sisi paling kanan mengangkat kedua tangannya seperti sedang merayakan kebahagiaan.",
+    "Q260.jpg|2": "Q260.jpg|2|Pria di tengah yang duduk di antara kedua pria berkacamata lainnya memiliki senyum lebar dan janggut tipis. Ia mengenakan kalung medali berwarna emas dengan logo \"ITS\" yang menggantung di lehernya.",
+    "Q260.jpg|3": "Q260.jpg|3|Orang kedua dari kiri yang berkacamata juga menunjukkan tanda jempol ke atas dengan tangan kirinya yang diletakkan di depan dada. Orang di samping kanannya, yang juga berkacamata, tersenyum kecil sambil menoleh sedikit ke kiri.",
+    "Q260.jpg|4": "Q260.jpg|4|Latar belakangnya menampilkan suasana dalam ruangan aula wisuda, di mana terdapat banyak wisudawan lain yang mengenakan toga yang sama duduk di kursi-kursi di baris belakang. Terlihat pula beberapa orang di kejauhan yang tidak mengenakan toga, beberapa pilar bangunan putih, dan pencahayaan ruangan yang terang.",
+    "Q272.jpg|0": "Q272.jpg|0|Gambar menunjukkan sebuah gedung TEKNIK INFORMATIKA bertingkat empat dengan desain arsitektur modern yang memanjang. Struktur utama gedung didominasi warna krem dan jingga muda (salem) pada bagian dindingnya, dengan jajaran jendela kaca berbingkai putih yang tersusun rapi di setiap lantai.",
+    "Q272.jpg|1": "Q272.jpg|1|Di sisi kiri depan gedung TEKNIK INFORMATIKA, terdapat bagian struktur yang lebih tinggi berbentuk menara persegi berwarna abu-abu tua. Bagian menara ini dilengkapi dengan panel vertikal kaca hitam yang memanjang dari lantai atas hingga ke bawah, memberikan kesan futuristik pada bangunan.",
+    "Q272.jpg|2": "Q272.jpg|2|Atap gedung berbentuk limasan atau pelana dengan genteng berwarna cokelat tua atau abu-abu gelap. Di puncak struktur menara sebelah kiri, tampak sebuah tiang antena kecil yang menjulang ke atas langit.",
+    "Q272.jpg|3": "Q272.jpg|3|Area di depan gedung berupa lahan terbuka yang dipenuhi oleh hamparan rumput hijau dan semak-semak liar yang tumbuh cukup lebat. Di sisi paling kanan latar depan, terlihat pula kerangka struktur besi hitam yang menyerupai bagian dari konstruksi bangunan lain.",
+    "Q272.jpg|4": "Q272.jpg|4|Latar belakang gambar didominasi oleh pemandangan langit yang luas dan dipenuhi gumpalan awan putih keabu-abuan, menciptakan suasana cuaca yang sedikit mendung atau teduh di sekitar kompleks gedung tersebut.",
+    "Q281.jpg|3": "Q281.jpg|3|Pada bagian atas pintu masuk gedung terdapat tulisan vertikal KANTIN PUSAT, serta logo ITS yang berwarna emas dan biru di dinding bata merah.",
+    "Q283.jpg|0": "Q283.jpg|0|Bangunan dengan tulisan KANTIN PUSAT ITS terlihat sebagai objek utama dalam gambar, berada di area yang tampak seperti kampus.",
+    "Q283.jpg|2": "Q283.jpg|2|Teks KANTIN PUSAT ITS terpampang vertikal pada panel kayu, menunjukkan fungsi bangunan tersebut sebagai kantin pusat.",
+    "Q311.jpg|0": "Q311.jpg|0|Gambar menunjukkan lima orang pria yang sedang berdiri berjejer di atas panggung dalam sebuah acara formal universitas. Kelimanya mengenakan jubah kebesaran akademik atau toga profesor berwarna hitam bermotif perak vertikal di bagian depan, lengkap dengan topi akademik berbentuk segi empat dan kemeja putih berkerah dengan dasi kupu-kupu putih di dalamnya.",
+    "Q311.jpg|1": "Q311.jpg|1|Pria kedua dan ketiga dari kiri memegang sertifikat atau piagam penghargaan berbingkai cokelat emas dengan kedua tangan mereka di depan dada. Sementara itu, pria di posisi paling kiri, pria kedua dari kanan, dan pria di posisi paling kanan berdiri tegap dengan posisi tangan lurus ke bawah atau bertumpu di depan tubuh.",
+    "Q311.jpg|2": "Q311.jpg|2|Setiap pria mengenakan kalung samir dengan warna dan atribut medali yang berbeda-beda; pria paling kiri mengenakan samir biru-kuning dengan medali emas besar, pria kedua dari kiri mengenakan samir biru dengan medali perak berbentuk segi lima, pria tengah mengenakan samir hijau-biru, pria kedua dari kanan mengenakan kalung rantai jabatan emas yang megah, dan pria paling kanan mengenakan samir biru-putih dengan medali perak bulat.",
+    "Q311.jpg|3": "Q311.jpg|3|Latar belakang panggung didominasi oleh layar digital (LED screen) besar berwarna biru muda terang yang menampilkan tulisan-tulisan putih, di antaranya terlihat nama \"PROF. HIDAYAT SUGIHARDJO MASIRAN\", teks \"Institut Teknologi Sepuluh Nopember\", serta tanggal \"11 Desember 2019, Gedung Research Center ITS\".",
+    "Q311.jpg|4": "Q311.jpg|4|Di bagian bawah layar belakang, terdapat dinding panel dekoratif berlubang-lubang kecil berwarna putih keabu-abuan. Tepat di depan barisan para profesor, di pinggir depan panggung kayu cokelat, tampak tanaman hias berdaun hijau yang disusun rapi sebagai dekorasi."
+}
+
+with open('/home/firania/Documents/tugasakhir/ai/capt_qwen.csv', 'r') as f:
+    lines = f.readlines()
+
+for i, line in enumerate(lines):
+    if line.strip():
+        parts = line.strip().split('|')
+        if len(parts) >= 2:
+            key = f"{parts[0]}|{parts[1]}"
+            if key in replacements:
+                lines[i] = replacements[key] + '\n'
+
+with open('/home/firania/Documents/tugasakhir/ai/capt_qwen.csv', 'w') as f:
+    f.writelines(lines)

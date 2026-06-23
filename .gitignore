@@ -29,3 +29,7 @@ backend/models/
 temp_lora_output/
 models/*.safetensors
 models/metadata.json
+ai/allaboutITS/
+ai/dataset_combined/
+ai/lora_output_its/
+ai/lora_output_its_old/
