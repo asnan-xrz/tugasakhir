@@ -1,5 +1,7 @@
 import torch
-from diffusers import StableDiffusionPipeline
+from diffusers import StableDiffusionPipeline, StableDiffusionControlNetPipeline, ControlNetModel
+import cv2
+import numpy as np
 import asyncio
 import gc
 import os
@@ -16,6 +18,7 @@ civitai_api_key = os.getenv("CIVITAI_API_KEY")
 pipe = None
 current_base_model = None
 current_lora_path = None
+current_pipeline_type = None  # 'base' or 'controlnet'
 
 MODELS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
 os.makedirs(MODELS_DIR, exist_ok=True)
@@ -108,10 +111,11 @@ async def download_model_from_civitai(model_version_id: str, save_path: str, is_
                 metadata[filename] = {"trainedWords": trained_words}
                 _save_metadata(metadata)
 
-def _get_pipe(base_model_path=None, lora_path=None, use_ip_adapter=False):
+def _get_pipe(base_model_path=None, lora_path=None, use_ip_adapter=False, use_controlnet=False):
     global pipe
     global current_base_model
     global current_lora_path
+    global current_pipeline_type
     
     # === RTX 3050 6GB SAFETY: Cap CUDA memory to 80% to prevent power surge shutdown ===
     if torch.cuda.is_available():
@@ -119,9 +123,11 @@ def _get_pipe(base_model_path=None, lora_path=None, use_ip_adapter=False):
         # Limit PyTorch memory allocator fragmentation
         os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
     
-    # Reload model if base model has changed
-    if pipe is None or current_base_model != base_model_path:
-        print(f"🔄 Loading Base Model: {base_model_path or 'Default RunwayML 1.5'}")
+    desired_pipeline_type = "controlnet" if use_controlnet else "base"
+    
+    # Reload model if base model or pipeline type has changed
+    if pipe is None or current_base_model != base_model_path or current_pipeline_type != desired_pipeline_type:
+        print(f"🔄 Loading Base Model: {base_model_path or 'Default RunwayML 1.5'} [Type: {desired_pipeline_type}]")
         
         if pipe is not None:
             del pipe
@@ -135,23 +141,40 @@ def _get_pipe(base_model_path=None, lora_path=None, use_ip_adapter=False):
             
         hf_token = os.getenv("HF_TOKEN")
         
+        controlnet = None
+        if use_controlnet:
+            print("🔄 Loading ControlNet Canny Model...")
+            controlnet = ControlNetModel.from_pretrained(
+                "lllyasviel/sd-controlnet-canny", 
+                torch_dtype=torch.float16,
+                token=hf_token
+            )
+            pipeline_class = StableDiffusionControlNetPipeline
+            kwargs_pipe = {"controlnet": controlnet}
+        else:
+            pipeline_class = StableDiffusionPipeline
+            kwargs_pipe = {}
+        
         if base_model_path and os.path.exists(base_model_path) and base_model_path.endswith('.safetensors'):
-            pipe = StableDiffusionPipeline.from_single_file(
+            pipe = pipeline_class.from_single_file(
                 base_model_path,
                 torch_dtype=torch.float16,
                 safety_checker=None,
-                low_cpu_mem_usage=False
+                low_cpu_mem_usage=False,
+                **kwargs_pipe
             )
         else:
-            pipe = StableDiffusionPipeline.from_pretrained(
+            pipe = pipeline_class.from_pretrained(
                 "runwayml/stable-diffusion-v1-5", 
                 torch_dtype=torch.float16,
                 safety_checker=None,
                 token=hf_token,
-                low_cpu_mem_usage=False
+                low_cpu_mem_usage=False,
+                **kwargs_pipe
             )
             
         current_base_model = base_model_path
+        current_pipeline_type = desired_pipeline_type
         
         # IP-Adapter HANYA dimuat kalau memang ada reference image beneran
         if use_ip_adapter:
@@ -211,11 +234,11 @@ SD_HEIGHT = 384
 SD_STEPS = 20
 SD_GUIDANCE = 7.5
 
-def _generate_sync(prompt: str, output_path: str, image_reference: str = None, base_model_path: str = None, lora_path: str = None) -> str:
+def _generate_sync(prompt: str, output_path: str, image_reference: str = None, base_model_path: str = None, lora_path: str = None, use_controlnet: bool = False) -> str:
     # Determine apakah kita benar-benar punya reference image
     has_real_reference = bool(image_reference and os.path.exists(image_reference))
     
-    p = _get_pipe(base_model_path, lora_path, use_ip_adapter=has_real_reference)
+    p = _get_pipe(base_model_path, lora_path, use_ip_adapter=has_real_reference, use_controlnet=use_controlnet)
     
     if lora_path is None:
         # Prioritas: lora_output_its (hasil training terbaru), fallback ke models/
@@ -257,14 +280,37 @@ def _generate_sync(prompt: str, output_path: str, image_reference: str = None, b
     if has_real_reference:
         try:
             ref_img = Image.open(image_reference).convert("RGB").resize((SD_WIDTH, SD_HEIGHT))
+            
+            if use_controlnet:
+                # Convert reference image to Canny Edge Map
+                image_arr = np.array(ref_img)
+                low_threshold = 50  # Diturunkan agar menangkap lebih banyak detail halus (teks/logo)
+                high_threshold = 150
+                edges = cv2.Canny(image_arr, low_threshold, high_threshold)
+                edges = edges[:, :, None]
+                edges = np.concatenate([edges, edges, edges], axis=2)
+                canny_img = Image.fromarray(edges)
+                
+                # Simpan Canny Map untuk keperluan debugging agar pengguna bisa melihat
+                # outline apa yang sebenarnya ditangkap oleh ControlNet
+                os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                debug_path = output_path.replace(".png", "_canny_debug.png")
+                canny_img.save(debug_path)
+                
+                kwargs["image"] = canny_img
+                kwargs["controlnet_conditioning_scale"] = 1.0
+                print(f"🧠 ControlNet Canny Edge Map generated and saved to {debug_path}")
+            
             kwargs["ip_adapter_image"] = ref_img
             p.set_ip_adapter_scale(0.5)
             print(f"🖼️ IP-Adapter active with reference: {image_reference}")
         except Exception as e:
-            print(f"Failed to load IP-Adapter image {image_reference}: {e}")
-            # IP-Adapter was loaded, must provide dummy
+            print(f"Failed to load image reference {image_reference}: {e}")
             kwargs["ip_adapter_image"] = Image.new("RGB", (SD_WIDTH, SD_HEIGHT), (0, 0, 0))
             p.set_ip_adapter_scale(0.0)
+            if use_controlnet:
+                kwargs["image"] = Image.new("RGB", (SD_WIDTH, SD_HEIGHT), (0, 0, 0))
+                kwargs["controlnet_conditioning_scale"] = 0.0
     # Kalau IP-Adapter tidak dimuat, JANGAN kirim ip_adapter_image sama sekali
     
     print(f"⚡ Generating at {SD_WIDTH}x{SD_HEIGHT}, {SD_STEPS} steps (RTX 3050 Safe Mode)")
@@ -281,10 +327,10 @@ def _generate_sync(prompt: str, output_path: str, image_reference: str = None, b
     print("🧹 GPU VRAM flushed post-generation.")
     return output_path
 
-async def generate_image(prompt: str, output_path: str, image_reference: str = None, base_model_path: str = None, lora_path: str = None) -> str:
+async def generate_image(prompt: str, output_path: str, image_reference: str = None, base_model_path: str = None, lora_path: str = None, use_controlnet: bool = False) -> str:
     """
     Generates an image safely wrapping PyTorch rendering on a background thread.
     Optimized for RTX 3050 6GB to prevent system shutdown.
     """
-    print(f"Generating image for prompt: {prompt}")
-    return await asyncio.to_thread(_generate_sync, prompt, output_path, image_reference, base_model_path, lora_path)
+    print(f"Generating image for prompt: {prompt} (ControlNet: {use_controlnet})")
+    return await asyncio.to_thread(_generate_sync, prompt, output_path, image_reference, base_model_path, lora_path, use_controlnet)
