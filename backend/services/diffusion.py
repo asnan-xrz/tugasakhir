@@ -235,9 +235,26 @@ SD_STEPS = 20
 SD_GUIDANCE = 7.5
 
 def _generate_sync(prompt: str, output_path: str, image_reference: str = None, base_model_path: str = None, lora_path: str = None, use_controlnet: bool = False) -> str:
-    # Determine apakah kita benar-benar punya reference image
-    has_real_reference = bool(image_reference and os.path.exists(image_reference))
+    from PIL import Image
     
+    # 1. Validasi reference image di awal untuk mencegah penggunaan dummy blank image
+    ref_img = None
+    has_real_reference = False
+    
+    if image_reference and os.path.exists(image_reference):
+        try:
+            ref_img = Image.open(image_reference).convert("RGB").resize((SD_WIDTH, SD_HEIGHT))
+            has_real_reference = True
+        except Exception as e:
+            print(f"⚠️ Failed to load image reference {image_reference}: {e}")
+            ref_img = None
+            has_real_reference = False
+            
+    # === BRANCHING LOGIC ===
+    # Jika tidak ada gambar valid (RAG mati atau gambar korup), paksa ke Jalur B (Pure Text-to-Image)
+    if not has_real_reference:
+        use_controlnet = False
+
     p = _get_pipe(base_model_path, lora_path, use_ip_adapter=has_real_reference, use_controlnet=use_controlnet)
     
     if lora_path is None:
@@ -274,43 +291,35 @@ def _generate_sync(prompt: str, output_path: str, image_reference: str = None, b
     if lora_path and "its_new_lora.safetensors" in lora_path:
         kwargs["cross_attention_kwargs"] = {"scale": 0.65}
         
-    ref_img = None
-    from PIL import Image
-    
     if has_real_reference:
-        try:
-            ref_img = Image.open(image_reference).convert("RGB").resize((SD_WIDTH, SD_HEIGHT))
+        # JALUR A: Mode RAG (Butuh Gambar)
+        if use_controlnet:
+            # Convert reference image to Canny Edge Map
+            image_arr = np.array(ref_img)
+            low_threshold = 50  # Diturunkan agar menangkap lebih banyak detail halus (teks/logo)
+            high_threshold = 150
+            edges = cv2.Canny(image_arr, low_threshold, high_threshold)
+            edges = edges[:, :, None]
+            edges = np.concatenate([edges, edges, edges], axis=2)
+            canny_img = Image.fromarray(edges)
             
-            if use_controlnet:
-                # Convert reference image to Canny Edge Map
-                image_arr = np.array(ref_img)
-                low_threshold = 50  # Diturunkan agar menangkap lebih banyak detail halus (teks/logo)
-                high_threshold = 150
-                edges = cv2.Canny(image_arr, low_threshold, high_threshold)
-                edges = edges[:, :, None]
-                edges = np.concatenate([edges, edges, edges], axis=2)
-                canny_img = Image.fromarray(edges)
-                
-                # Simpan Canny Map untuk keperluan debugging agar pengguna bisa melihat
-                # outline apa yang sebenarnya ditangkap oleh ControlNet
-                os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                debug_path = output_path.replace(".png", "_canny_debug.png")
-                canny_img.save(debug_path)
-                
-                kwargs["image"] = canny_img
-                kwargs["controlnet_conditioning_scale"] = 1.0
-                print(f"🧠 ControlNet Canny Edge Map generated and saved to {debug_path}")
+            # Simpan Canny Map untuk keperluan debugging agar pengguna bisa melihat
+            # outline apa yang sebenarnya ditangkap oleh ControlNet
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            debug_path = output_path.replace(".png", "_canny_debug.png")
+            canny_img.save(debug_path)
             
-            kwargs["ip_adapter_image"] = ref_img
-            p.set_ip_adapter_scale(0.5)
-            print(f"🖼️ IP-Adapter active with reference: {image_reference}")
-        except Exception as e:
-            print(f"Failed to load image reference {image_reference}: {e}")
-            kwargs["ip_adapter_image"] = Image.new("RGB", (SD_WIDTH, SD_HEIGHT), (0, 0, 0))
-            p.set_ip_adapter_scale(0.0)
-            if use_controlnet:
-                kwargs["image"] = Image.new("RGB", (SD_WIDTH, SD_HEIGHT), (0, 0, 0))
-                kwargs["controlnet_conditioning_scale"] = 0.0
+            kwargs["image"] = canny_img
+            kwargs["controlnet_conditioning_scale"] = 1.0
+            print(f"🧠 ControlNet Canny Edge Map generated and saved to {debug_path}")
+            
+        kwargs["ip_adapter_image"] = ref_img
+        p.set_ip_adapter_scale(0.5)
+        print(f"🖼️ IP-Adapter active with reference: {image_reference}")
+    else:
+        # JALUR B: Mode NO RAG (Pure Text-to-Image)
+        print("ℹ️ Mode NO RAG: Pure Text-to-Image pipeline active (No visual references).")
+        
     # Kalau IP-Adapter tidak dimuat, JANGAN kirim ip_adapter_image sama sekali
     
     print(f"⚡ Generating at {SD_WIDTH}x{SD_HEIGHT}, {SD_STEPS} steps (RTX 3050 Safe Mode)")
