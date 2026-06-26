@@ -8,6 +8,7 @@ import os
 import json
 import httpx
 import hashlib
+import random
 from dotenv import load_dotenv
 
 config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "config.env")
@@ -125,8 +126,21 @@ def _get_pipe(base_model_path=None, lora_path=None, use_ip_adapter=False, use_co
     
     desired_pipeline_type = "controlnet" if use_controlnet else "base"
     
-    # Reload model if base model or pipeline type has changed
-    if pipe is None or current_base_model != base_model_path or current_pipeline_type != desired_pipeline_type:
+    # Cek tipe pipe aktual (bukan hanya state tracking) — ini penting untuk RTX 3050
+    # dimana reload bisa gagal OOM dan meninggalkan state tidak konsisten
+    actual_pipe_type = None
+    if pipe is not None:
+        actual_pipe_type = "controlnet" if isinstance(pipe, StableDiffusionControlNetPipeline) else "base"
+    
+    # Reload jika: pipe tidak ada, base model berbeda, ATAU tipe pipeline tidak sesuai (cek aktual!)
+    needs_reload = (
+        pipe is None
+        or current_base_model != base_model_path
+        or current_pipeline_type != desired_pipeline_type
+        or actual_pipe_type != desired_pipeline_type  # Safety: cek tipe nyata, bukan hanya cached state
+    )
+    
+    if needs_reload:
         print(f"🔄 Loading Base Model: {base_model_path or 'Default RunwayML 1.5'} [Type: {desired_pipeline_type}]")
         
         if pipe is not None:
@@ -155,26 +169,46 @@ def _get_pipe(base_model_path=None, lora_path=None, use_ip_adapter=False, use_co
             pipeline_class = StableDiffusionPipeline
             kwargs_pipe = {}
         
-        if base_model_path and os.path.exists(base_model_path) and base_model_path.endswith('.safetensors'):
-            pipe = pipeline_class.from_single_file(
-                base_model_path,
-                torch_dtype=torch.float16,
-                safety_checker=None,
-                low_cpu_mem_usage=False,
-                **kwargs_pipe
-            )
-        else:
-            pipe = pipeline_class.from_pretrained(
-                "runwayml/stable-diffusion-v1-5", 
+        try:
+            if base_model_path and os.path.exists(base_model_path) and base_model_path.endswith('.safetensors'):
+                pipe = pipeline_class.from_single_file(
+                    base_model_path,
+                    torch_dtype=torch.float16,
+                    safety_checker=None,
+                    low_cpu_mem_usage=False,
+                    **kwargs_pipe
+                )
+            else:
+                pipe = pipeline_class.from_pretrained(
+                    "runwayml/stable-diffusion-v1-5", 
+                    torch_dtype=torch.float16,
+                    safety_checker=None,
+                    token=hf_token,
+                    low_cpu_mem_usage=False,
+                    **kwargs_pipe
+                )
+                
+            # Hanya update state jika load BERHASIL — mencegah state korup pada RTX 3050
+            current_base_model = base_model_path
+            current_pipeline_type = desired_pipeline_type
+            
+        except torch.cuda.OutOfMemoryError as oom_err:
+            # RTX 3050: jika OOM saat ganti pipeline type, coba tanpa ControlNet sebagai fallback
+            print(f"🔴 OOM saat load pipeline [{desired_pipeline_type}]: {oom_err}")
+            print("⚠️ Fallback: mencoba load base pipeline saja (tanpa ControlNet) untuk hemat VRAM...")
+            gc.collect()
+            torch.cuda.empty_cache()
+            import time
+            time.sleep(3)
+            pipe = StableDiffusionPipeline.from_pretrained(
+                "runwayml/stable-diffusion-v1-5",
                 torch_dtype=torch.float16,
                 safety_checker=None,
                 token=hf_token,
                 low_cpu_mem_usage=False,
-                **kwargs_pipe
             )
-            
-        current_base_model = base_model_path
-        current_pipeline_type = desired_pipeline_type
+            current_base_model = base_model_path
+            current_pipeline_type = "base"  # Paksa ke base karena ControlNet OOM
         
         # IP-Adapter HANYA dimuat kalau memang ada reference image beneran
         if use_ip_adapter:
@@ -257,6 +291,27 @@ def _generate_sync(prompt: str, output_path: str, image_reference: str = None, b
 
     p = _get_pipe(base_model_path, lora_path, use_ip_adapter=has_real_reference, use_controlnet=use_controlnet)
     
+    # === SAFETY NET untuk RTX 3050 ===
+    # Cek tipe pipeline AKTUAL yang dikembalikan. Jika masih ControlNet padahal
+    # seharusnya base (karena OOM fallback), override use_controlnet agar konsisten.
+    is_controlnet_pipe = isinstance(p, StableDiffusionControlNetPipeline)
+    blank_controlnet_image = None  # Inisialisasi selalu None
+
+    if is_controlnet_pipe and not has_real_reference:
+        # Pipeline ControlNet tapi tidak ada reference image → AKAN CRASH jika image=None!
+        # Buat blank black image sebagai ControlNet conditioning SAJA (bukan IP-Adapter)
+        # agar pipeline tidak crash, output tetap dikendalikan 100% oleh teks prompt.
+        print("⚠️ [RTX 3050 Guard] ControlNet pipeline aktif tapi tidak ada reference image!")
+        print("⚠️ Menyiapkan blank black image sebagai ControlNet conditioning fallback...")
+        from PIL import Image as PILImage
+        blank_arr = np.zeros((SD_HEIGHT, SD_WIDTH, 3), dtype=np.uint8)
+        blank_controlnet_image = PILImage.fromarray(blank_arr)  # Hitam = tidak ada edge = pure text-driven
+        use_controlnet = True   # Tetap pakai ControlNet pipe tapi dengan blank image
+        ref_img = None          # IP-Adapter tetap OFF
+        has_real_reference = False  # IP-Adapter scale tetap tidak aktif
+    elif not is_controlnet_pipe:
+        use_controlnet = False  # Pipeline base → tidak perlu ControlNet kwargs
+    
     if lora_path is None:
         # Prioritas: lora_output_its (hasil training terbaru), fallback ke models/
         default_lora = os.path.join(os.path.dirname(MODELS_DIR), "ai", "lora_output_its", "pytorch_lora_weights.safetensors")
@@ -280,11 +335,19 @@ def _generate_sync(prompt: str, output_path: str, image_reference: str = None, b
         if word and word.lower() not in prompt.lower():
             prompt = f"{word}, {prompt}"
             
+    # === FIX KRITIS: Setiap frame WAJIB pakai seed acak yang BERBEDA ===
+    # Tanpa ini, pipeline yang di-cache (pipe global) akan menghasilkan gambar
+    # yang identik di setiap frame karena PRNG PyTorch tidak di-reset.
+    frame_seed = random.randint(0, 2**32 - 1)
+    generator = torch.Generator(device="cpu").manual_seed(frame_seed)
+    print(f"🎲 Frame seed: {frame_seed} (unik per frame, untuk reproduksi simpan nilai ini)")
+
     kwargs = {
         "width": SD_WIDTH,
         "height": SD_HEIGHT,
         "num_inference_steps": SD_STEPS,
         "guidance_scale": SD_GUIDANCE,
+        "generator": generator,  # KUNCI: seed berbeda = gambar berbeda
     }
     
     # Balance LoRA intensity when combining with IP-Adapter
@@ -314,15 +377,30 @@ def _generate_sync(prompt: str, output_path: str, image_reference: str = None, b
             print(f"🧠 ControlNet Canny Edge Map generated and saved to {debug_path}")
             
         kwargs["ip_adapter_image"] = ref_img
-        p.set_ip_adapter_scale(0.5)
+        p.set_ip_adapter_scale(0.35)  # 0.35: referensi "menginspirasi" bukan "mendominasi" — lebih kreatif
         print(f"🖼️ IP-Adapter active with reference: {image_reference}")
     else:
         # JALUR B: Mode NO RAG (Pure Text-to-Image)
         print("ℹ️ Mode NO RAG: Pure Text-to-Image pipeline active (No visual references).")
         
-    # Kalau IP-Adapter tidak dimuat, JANGAN kirim ip_adapter_image sama sekali
+        # === FIX KRITIS: Inject blank_controlnet_image jika pipeline ControlNet
+        # ter-cache dari sesi sebelumnya (bisa terjadi pada RTX 3050 karena pipe global).
+        # Tanpa ini, ControlNet pipeline akan menerima image=None → NoneType crash!
+        if use_controlnet and blank_controlnet_image is not None:
+            kwargs["image"] = blank_controlnet_image
+            kwargs["controlnet_conditioning_scale"] = 0.0  # Scale=0 → ControlNet buta, murni text-driven
+            print("⚠️ [RTX 3050 Guard] Blank ControlNet image injected dengan scale=0.0 (pure text mode).")
     
-    print(f"⚡ Generating at {SD_WIDTH}x{SD_HEIGHT}, {SD_STEPS} steps (RTX 3050 Safe Mode)")
+    # === FINAL GUARD: Pastikan ControlNet pipeline TIDAK dipanggil tanpa 'image' ===
+    # Ini adalah safety net terakhir untuk menangkap edge case apapun yang lolos di atas.
+    if is_controlnet_pipe and "image" not in kwargs:
+        print("🛑 [Final Guard] ControlNet pipe terdeteksi tanpa kwargs['image']! Injecting emergency blank image.")
+        from PIL import Image as _EmergPIL
+        _blank = _EmergPIL.fromarray(np.zeros((SD_HEIGHT, SD_WIDTH, 3), dtype=np.uint8))
+        kwargs["image"] = _blank
+        kwargs["controlnet_conditioning_scale"] = 0.0
+    
+    print(f"⚡ Generating at {SD_WIDTH}x{SD_HEIGHT}, {SD_STEPS} steps, seed={frame_seed} (RTX 3050 Safe Mode)")
     image = p(prompt, **kwargs).images[0]
     image.save(output_path)
     

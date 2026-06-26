@@ -178,45 +178,57 @@ gpu_semaphore = asyncio.Semaphore(1)
 import re as _re
 _BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 
-def _pick_q_priority_image(visual_contexts: list) -> str:
+def _pick_q_priority_image(visual_contexts: list, exclude_sources: set = None) -> str:
     """
     Memilih gambar referensi untuk IP-Adapter dengan PRIORITAS Q-series (allaboutITS).
     Dataset allaboutITS (Q*.jpg) lebih berkualitas — foto kampus ITS dengan resolusi tinggi
     dan estetika yang lebih konsisten dibanding P/F/TC-series.
     
     Strategi:
-    1. Cari Q-series dari context RAG yang ada
-    2. Fallback ke seri lain jika tidak ada Q
+    1. Cari Q-series dari context RAG yang ada, skip jika sudah dipakai (exclude_sources)
+    2. Fallback ke seri lain jika tidak ada Q yang belum dipakai
     3. Selalu strip suffix _aug{N} sebelum resolve ke filesystem
+    
+    Args:
+        visual_contexts: Hasil RAG retrieval
+        exclude_sources: Set nama file (tanpa _aug) yang sudah dipakai di frame sebelumnya.
+                         Jika None, tidak ada pengecualian.
     """
     if not visual_contexts:
         return None
     
-    # Pass 1: cari Q-series dulu (allaboutITS — lebih berkualitas)
+    if exclude_sources is None:
+        exclude_sources = set()
+    
+    # Pass 1: cari Q-series yang BELUM dipakai (allaboutITS — lebih berkualitas)
     for ctx in visual_contexts:
         src = ctx.get('source', '')
         if not src or src == 'Unknown':
             continue
         src_clean = _re.sub(r'_aug\d+(?=\.)', '', src)
+        if src_clean in exclude_sources:
+            continue  # Skip — sudah dipakai di frame sebelumnya
         if src_clean.upper().startswith('Q'):
             candidate = os.path.join(_BASE_DIR, 'ai', 'allaboutITS', src_clean)
             if os.path.exists(candidate):
-                print(f"[IP-Adapter] ✅ Q-priority hit: {candidate} (dari src={src})")
+                print(f"[IP-Adapter] ✅ Q-priority hit (fresh): {candidate} (dari src={src})")
                 return candidate
     
-    # Pass 2: fallback ke seri lain jika tidak ada Q yang cocok
+    # Pass 2: fallback ke seri lain yang BELUM dipakai
     for ctx in visual_contexts:
         src = ctx.get('source', '')
         if not src or src == 'Unknown':
             continue
         src_clean = _re.sub(r'_aug\d+(?=\.)', '', src)
+        if src_clean in exclude_sources:
+            continue  # Skip — sudah dipakai di frame sebelumnya
         for img_dir in ['ai/allaboutITS', 'ai/images_its']:
             candidate = os.path.join(_BASE_DIR, img_dir, src_clean)
             if os.path.exists(candidate):
-                print(f"[IP-Adapter] ⚠️ Non-Q fallback: {candidate} (dari src={src})")
+                print(f"[IP-Adapter] ⚠️ Non-Q fallback (fresh): {candidate} (dari src={src})")
                 return candidate
     
-    print("[IP-Adapter] ❌ Tidak ada referensi gambar yang valid ditemukan.")
+    print("[IP-Adapter] ❌ Semua referensi sudah dipakai atau tidak ada yang valid. Frame ini akan pure text-driven.")
     return None
 
 def _rerank_q_first(visual_contexts: list) -> list:
@@ -258,8 +270,8 @@ async def async_generate_storyboard(task_id: str, prompt: str, visual_descriptio
             if visual_contexts:
                 # Re-rank: Q-series (allaboutITS) naik ke atas untuk konteks RAG dan IP-Adapter
                 visual_contexts = _rerank_q_first(visual_contexts)
-                # Pilih gambar referensi dari seluruh pool 15 konteks
-                image_reference = _pick_q_priority_image(visual_contexts)
+                # Pilih gambar referensi dari seluruh pool 15 konteks (single-frame, tidak butuh exclude)
+                image_reference = _pick_q_priority_image(visual_contexts, exclude_sources=None)
                 context_parts = []
                 # HANYA gunakan 3 konteks teks terbaik untuk LLM agar tidak OOM token
                 for ctx in visual_contexts[:3]:
@@ -407,6 +419,10 @@ async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bo
                 "nlp_scores": nlp_scores
             })
         
+        # Track gambar referensi yang sudah dipakai agar setiap frame mendapat IP-Adapter reference UNIK.
+        # Jika semua referensi dari RAG pool sudah habis, frame selanjutnya akan pure text+LoRA (lebih kreatif).
+        used_image_references: set = set()
+        
         for idx, scene in enumerate(scenes):
             tasks_db[task_id]["status"] = "processing_frame"
             tasks_db[task_id]["current_frame"] = idx + 1
@@ -431,10 +447,19 @@ async def async_generate_full_storyboard(task_id: str, concept: str, use_rag: bo
             if visual_contexts:
                 # Re-rank: Q-series (allaboutITS) naik ke atas untuk konteks RAG dan IP-Adapter
                 visual_contexts = _rerank_q_first(visual_contexts)
-                image_reference = _pick_q_priority_image(visual_contexts)
-                tasks_db[task_id]["log_stream"].append(
-                    f"Frame {idx + 1}: IP-Adapter ref → {os.path.basename(image_reference) if image_reference else 'None (no Q-series found)'}"
-                )
+                # Pilih referensi yang BELUM pernah dipakai di frame-frame sebelumnya
+                image_reference = _pick_q_priority_image(visual_contexts, exclude_sources=used_image_references)
+                if image_reference is not None:
+                    # Catat referensi ini agar tidak dipakai ulang di frame berikutnya
+                    ref_basename = os.path.basename(image_reference)
+                    used_image_references.add(ref_basename)
+                    tasks_db[task_id]["log_stream"].append(
+                        f"Frame {idx + 1}: IP-Adapter ref → {ref_basename} (fresh, belum dipakai)"
+                    )
+                else:
+                    tasks_db[task_id]["log_stream"].append(
+                        f"Frame {idx + 1}: IP-Adapter ref → None (semua referensi sudah dipakai, mode pure text+LoRA)"
+                    )
                 context_parts = []
                 for ctx in visual_contexts[:3]:
                     ctx_text = ctx.get('text', ctx.get('caption', ''))
